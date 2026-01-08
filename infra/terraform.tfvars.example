@@ -1,0 +1,19 @@
+# AWS Region
+aws_region = "eu-west-1"
+
+# Domain configuration
+domain_name     = "decenza.coffee"
+route53_zone_id = "Z0123456789ABCDEFGHIJ"  # Your Route 53 hosted zone ID
+
+# Environment
+environment = "prod"
+
+# CORS origin (use specific domain in production)
+cors_origin = "https://decenza.coffee"
+
+# Raw events TTL (days)
+raw_ttl_days = 180
+
+# API rate limiting
+api_throttle_rate  = 100
+api_throttle_burst = 200
