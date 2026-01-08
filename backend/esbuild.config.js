@@ -27,7 +27,8 @@ async function build() {
     external: [
       '@aws-sdk/client-dynamodb',
       '@aws-sdk/lib-dynamodb',
-      '@aws-sdk/client-apigatewaymanagementapi'
+      '@aws-sdk/client-apigatewaymanagementapi',
+      '@aws-sdk/client-s3'
     ],
     banner: {
       js: `import { createRequire } from 'module'; const require = createRequire(import.meta.url);`

@@ -89,3 +89,23 @@ resource "aws_iam_role_policy" "lambda_apigateway" {
     ]
   })
 }
+
+# S3 policy (for export shots to write to website bucket)
+resource "aws_iam_role_policy" "lambda_s3" {
+  name = "${local.project_name}-lambda-s3"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl"
+        ]
+        Resource = "${aws_s3_bucket.website.arn}/api/*"
+      }
+    ]
+  })
+}

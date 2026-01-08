@@ -175,3 +175,53 @@ resource "aws_cloudwatch_log_group" "ws_message" {
   retention_in_days = 14
   tags              = local.common_tags
 }
+
+# Export Shots Lambda (for screensaver/cached endpoint)
+resource "aws_lambda_function" "export_shots" {
+  function_name = "${local.project_name}-export-shots"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "exportShots.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 30
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/exportShots.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/exportShots.zip")
+
+  environment {
+    variables = {
+      SHOTS_RAW_TABLE = aws_dynamodb_table.shots_raw.name
+      WEBSITE_BUCKET  = aws_s3_bucket.website.id
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "export_shots" {
+  name              = "/aws/lambda/${aws_lambda_function.export_shots.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# EventBridge rule to trigger export every 30 seconds
+resource "aws_cloudwatch_event_rule" "export_shots_schedule" {
+  name                = "${local.project_name}-export-shots-schedule"
+  description         = "Trigger shots export every 30 seconds"
+  schedule_expression = "rate(1 minute)"
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "export_shots_target" {
+  rule      = aws_cloudwatch_event_rule.export_shots_schedule.name
+  target_id = "ExportShotsLambda"
+  arn       = aws_lambda_function.export_shots.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.export_shots.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.export_shots_schedule.arn
+}
