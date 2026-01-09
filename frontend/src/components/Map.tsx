@@ -16,11 +16,13 @@ interface AggregatedLocation {
   city: string;
   count: number;
   newestTs: number;
+  profiles: globalThis.Map<string, number>; // profile name -> count
 }
 
 interface LocationMarker {
   marker: maplibregl.Marker;
   element: HTMLDivElement;
+  popup: maplibregl.Popup;
 }
 
 const TILE_SOURCES = {
@@ -35,6 +37,8 @@ const TILE_SOURCES = {
 };
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+const DEFAULT_CENTER: [number, number] = [10, 45];
+const DEFAULT_ZOOM = 2;
 
 export default function Map({ shots, mapStyle }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -65,7 +69,12 @@ export default function Map({ shots, mapStyle }: MapProps) {
         if (ts > existing.newestTs) {
           existing.newestTs = ts;
         }
+        // Track profiles
+        const profile = shot.profile || 'Unknown';
+        existing.profiles.set(profile, (existing.profiles.get(profile) || 0) + 1);
       } else {
+        const profiles = new globalThis.Map<string, number>();
+        profiles.set(shot.profile || 'Unknown', 1);
         locationMap.set(key, {
           key,
           lat: shot.lat,
@@ -73,6 +82,7 @@ export default function Map({ shots, mapStyle }: MapProps) {
           city: shot.city,
           count: 1,
           newestTs: ts,
+          profiles,
         });
       }
     }
@@ -106,6 +116,27 @@ export default function Map({ shots, mapStyle }: MapProps) {
     };
   };
 
+  // Build popup HTML content
+  const buildPopupContent = (loc: AggregatedLocation): string => {
+    // Sort profiles by count descending
+    const sortedProfiles = Array.from(loc.profiles.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5); // Top 5 profiles
+
+    const profileList = sortedProfiles
+      .map(([name, count]) => `<li>${name}: ${count}</li>`)
+      .join('');
+
+    return `
+      <div class="shot-popup-title">${loc.city}</div>
+      <div class="shot-popup-count">${loc.count} shot${loc.count > 1 ? 's' : ''}</div>
+      <div class="shot-popup-profiles">
+        Profiles:
+        <ul>${profileList}</ul>
+      </div>
+    `;
+  };
+
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
@@ -113,8 +144,8 @@ export default function Map({ shots, mapStyle }: MapProps) {
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: buildStyle(mapStyle),
-      center: [10, 45],
-      zoom: 2,
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
       maxZoom: 18,
       minZoom: 1,
     });
@@ -126,6 +157,7 @@ export default function Map({ shots, mapStyle }: MapProps) {
         clearInterval(updateIntervalRef.current);
       }
       for (const data of markersRef.current.values()) {
+        data.popup.remove();
         data.marker.remove();
       }
       markersRef.current.clear();
@@ -153,6 +185,7 @@ export default function Map({ shots, mapStyle }: MapProps) {
       if (!newKeys.has(key)) {
         const data = markersRef.current.get(key);
         if (data) {
+          data.popup.remove();
           data.marker.remove();
           markersRef.current.delete(key);
         }
@@ -164,20 +197,36 @@ export default function Map({ shots, mapStyle }: MapProps) {
     for (const loc of aggregatedLocations) {
       const age = now - loc.newestTs;
       const opacity = Math.max(0.15, 1 - (age / TWENTY_FOUR_HOURS) * 0.85);
-      const scale = Math.min(1.5, 0.8 + (loc.count * 0.1));
+      const size = Math.min(24, 12 + (loc.count * 2)); // Size based on count
 
       const existing = markersRef.current.get(loc.key);
       if (existing) {
-        // Update opacity and scale
+        // Update opacity, size, and popup content
         existing.element.style.opacity = String(opacity);
-        existing.element.style.transform = `scale(${scale})`;
+        existing.element.style.setProperty('--dot-size', `${size}px`);
+        existing.popup.setHTML(buildPopupContent(loc));
       } else {
         // Create new marker
         const el = document.createElement('div');
         el.className = 'location-dot';
         el.style.opacity = String(opacity);
-        el.style.transform = `scale(${scale})`;
-        el.title = `${loc.city}: ${loc.count} shot${loc.count > 1 ? 's' : ''}`;
+        el.style.setProperty('--dot-size', `${size}px`);
+
+        // Create popup
+        const popup = new maplibregl.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          className: 'shot-popup',
+          offset: [0, -size / 2 - 5],
+        }).setHTML(buildPopupContent(loc));
+
+        // Show popup on hover
+        el.addEventListener('mouseenter', () => {
+          popup.setLngLat([loc.lon, loc.lat]).addTo(map);
+        });
+        el.addEventListener('mouseleave', () => {
+          popup.remove();
+        });
 
         const marker = new maplibregl.Marker({
           element: el,
@@ -186,7 +235,7 @@ export default function Map({ shots, mapStyle }: MapProps) {
           .setLngLat([loc.lon, loc.lat])
           .addTo(map);
 
-        markersRef.current.set(loc.key, { marker, element: el });
+        markersRef.current.set(loc.key, { marker, element: el, popup });
       }
     }
   }, [aggregatedLocations]);
@@ -212,5 +261,23 @@ export default function Map({ shots, mapStyle }: MapProps) {
     };
   }, [aggregatedLocations]);
 
-  return <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />;
+  const resetView = () => {
+    if (mapRef.current) {
+      mapRef.current.jumpTo({
+        center: DEFAULT_CENTER,
+        zoom: DEFAULT_ZOOM,
+      });
+    }
+  };
+
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
+      <div className="map-controls">
+        <button className="map-control-btn" onClick={resetView} title="Reset view">
+          ⌂
+        </button>
+      </div>
+    </div>
+  );
 }
