@@ -2,9 +2,11 @@ import { useEffect, useRef, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { ShotEvent } from '../types/shot';
+import type { MapStyle } from './Sidebar';
 
 interface MapProps {
   shots: ShotEvent[];
+  mapStyle: MapStyle;
 }
 
 interface AggregatedLocation {
@@ -21,13 +23,20 @@ interface LocationMarker {
   element: HTMLDivElement;
 }
 
-// CARTO Voyager - colorful, friendly basemap
-const TILES_URL = import.meta.env.VITE_MAP_TILES_URL ||
-  'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png';
+const TILE_SOURCES = {
+  voyager: {
+    url: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
+  },
+};
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
-export default function Map({ shots }: MapProps) {
+export default function Map({ shots, mapStyle }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<globalThis.Map<string, LocationMarker>>(new globalThis.Map());
@@ -71,33 +80,39 @@ export default function Map({ shots }: MapProps) {
     return Array.from(locationMap.values());
   }, [shots]);
 
+  // Build map style object
+  const buildStyle = (style: MapStyle): maplibregl.StyleSpecification => {
+    const source = TILE_SOURCES[style];
+    return {
+      version: 8,
+      sources: {
+        basemap: {
+          type: 'raster',
+          tiles: [source.url],
+          tileSize: 256,
+          attribution: source.attribution,
+        },
+      },
+      layers: [
+        {
+          id: 'basemap',
+          type: 'raster',
+          source: 'basemap',
+          minzoom: 0,
+          maxzoom: 20,
+        },
+      ],
+      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    };
+  };
+
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: {
-        version: 8,
-        sources: {
-          carto: {
-            type: 'raster',
-            tiles: [TILES_URL],
-            tileSize: 256,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-          },
-        },
-        layers: [
-          {
-            id: 'carto',
-            type: 'raster',
-            source: 'carto',
-            minzoom: 0,
-            maxzoom: 20,
-          },
-        ],
-        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-      },
+      style: buildStyle(mapStyle),
       center: [10, 45],
       zoom: 2,
       maxZoom: 18,
@@ -118,6 +133,12 @@ export default function Map({ shots }: MapProps) {
       mapRef.current = null;
     };
   }, []);
+
+  // Update map style when it changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setStyle(buildStyle(mapStyle));
+  }, [mapStyle]);
 
   // Update markers when aggregated locations change
   useEffect(() => {

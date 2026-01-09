@@ -273,6 +273,48 @@
     0 0 30px rgba(255, 107, 53, 0.5);
 }
 
+/* Map style toggle */
+.map-style-section {
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-bg-tertiary);
+}
+
+.map-style-section h3 {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted);
+  margin-bottom: 10px;
+}
+
+.map-style-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.map-style-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--color-bg-tertiary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.map-style-btn:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+}
+
+.map-style-btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .sidebar {

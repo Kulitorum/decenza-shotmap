@@ -19,27 +19,16 @@ GET https://decenza.coffee/api/shots-latest.json
 
 ```json
 {
-  "generated_at": "2026-01-08T23:07:25.913Z",
-  "count": 5,
+  "generated_at": "2026-01-09T00:52:35.548Z",
   "shots": [
-    {
-      "city": "Copenhagen",
-      "country_code": "DK",
-      "lat": 55.6761,
-      "lon": 12.5683,
-      "profile": "Classic Espresso",
-      "beverage_type": "espresso",
-      "ts": "2026-01-08T22:45:12.000Z"
-    },
-    {
-      "city": "Tokyo",
-      "country_code": "JP",
-      "lat": 35.6762,
-      "lon": 139.6503,
-      "profile": "Lungo",
-      "beverage_type": "lungo",
-      "ts": "2026-01-08T22:30:00.000Z"
-    }
+    { "lat": 55.7, "lon": 12.5, "age": 126 },
+    { "lat": 37.7749, "lon": -122.4194, "age": 137 },
+    { "lat": 35.6762, "lon": 139.6503, "age": 137 }
+  ],
+  "top_profiles": [
+    { "name": "Default", "count": 2 },
+    { "name": "Damian's LRv3", "count": 1 },
+    { "name": "Turbo", "count": 1 }
   ]
 }
 ```
@@ -49,22 +38,20 @@ GET https://decenza.coffee/api/shots-latest.json
 | Field | Type | Description |
 |-------|------|-------------|
 | `generated_at` | ISO 8601 | When this JSON was generated |
-| `count` | number | Total shots in the response |
-| `shots` | array | Shots from last 24 hours, newest first |
-| `shots[].city` | string | City name |
-| `shots[].country_code` | string | ISO 3166-1 alpha-2 country code |
+| `shots` | array | Shots from last 24 hours, newest first (max 1000) |
 | `shots[].lat` | number | Latitude |
 | `shots[].lon` | number | Longitude |
-| `shots[].profile` | string? | Espresso profile name (optional) |
-| `shots[].beverage_type` | string? | e.g. "espresso", "lungo" (optional) |
-| `shots[].ts` | ISO 8601 | When the shot was pulled |
+| `shots[].age` | number | Age in minutes since shot was pulled |
+| `top_profiles` | array | Top 10 most popular profiles |
+| `top_profiles[].name` | string | Profile name |
+| `top_profiles[].count` | number | Number of shots with this profile |
 
 ## Visualization Tips
 
-- Shots are sorted newest-first
-- Fade opacity based on age: `opacity = 1 - (age_hours / 24)`
-- Aggregate by location (same lat/lon = one dot, larger or with count)
-- New shots appear at the top of the array - animate them in
+- Shots are sorted newest-first (lowest age first)
+- Fade opacity based on age: `opacity = 1 - (age / 1440)` (1440 = minutes in 24 hours)
+- Aggregate nearby coordinates for cleaner display
+- New shots have low age values - animate them in
 
 ## Example Fetch (JavaScript)
 
@@ -72,11 +59,15 @@ GET https://decenza.coffee/api/shots-latest.json
 async function fetchShots() {
   const res = await fetch('https://decenza.coffee/api/shots-latest.json');
   const data = await res.json();
-  return data.shots;
+  return data;
 }
 
 // Poll every 30 seconds
-setInterval(fetchShots, 30000);
+setInterval(async () => {
+  const { shots, top_profiles } = await fetchShots();
+  // render shots on map...
+  // display top_profiles leaderboard...
+}, 30000);
 ```
 
 ## Example Fetch (Python)
@@ -87,11 +78,13 @@ import time
 
 def fetch_shots():
     response = requests.get('https://decenza.coffee/api/shots-latest.json')
-    return response.json()['shots']
+    return response.json()
 
 # Poll every 30 seconds
 while True:
-    shots = fetch_shots()
+    data = fetch_shots()
+    shots = data['shots']
+    top_profiles = data['top_profiles']
     # render shots...
     time.sleep(30)
 ```

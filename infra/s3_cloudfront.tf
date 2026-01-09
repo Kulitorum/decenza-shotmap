@@ -217,7 +217,7 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     }
 
     content_security_policy {
-      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; connect-src 'self' https://api.${local.domain_name} wss://ws.${local.domain_name} https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://demotiles.maplibre.org; font-src 'self' https://demotiles.maplibre.org; worker-src 'self' blob:; frame-ancestors 'none';"
+      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://server.arcgisonline.com https://*.arcgisonline.com; connect-src 'self' https://api.${local.domain_name} wss://ws.${local.domain_name} https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://server.arcgisonline.com https://*.arcgisonline.com https://demotiles.maplibre.org; font-src 'self' https://demotiles.maplibre.org; worker-src 'self' blob:; frame-ancestors 'none';"
       override                = true
     }
   }

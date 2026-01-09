@@ -1,19 +1,20 @@
-import type { ShotEvent, Stats } from '../types/shot';
-import type { ConnectionStatus } from '../hooks/useWebSocket';
+import type { Stats } from '../types/shot';
+
+export type MapStyle = 'voyager' | 'satellite';
 
 interface SidebarProps {
-  shots: ShotEvent[];
   stats: Stats;
-  connectionStatus: ConnectionStatus;
+  mapStyle: MapStyle;
+  onMapStyleChange: (style: MapStyle) => void;
   isOpen: boolean;
 }
 
-export default function Sidebar({ shots, stats, connectionStatus, isOpen }: SidebarProps) {
+export default function Sidebar({ stats, mapStyle, onMapStyleChange, isOpen }: SidebarProps) {
   return (
     <div className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
         <h1>Decenza Shot Map</h1>
-        <p>Live espresso shots worldwide</p>
+        <p>Espresso shots worldwide</p>
       </div>
 
       <div className="stats-section">
@@ -67,60 +68,23 @@ export default function Sidebar({ shots, stats, connectionStatus, isOpen }: Side
         </div>
       </div>
 
-      <div className="ticker-section">
-        <div className="ticker-header">
-          <h3>Live Feed</h3>
+      <div className="map-style-section">
+        <h3>Map Style</h3>
+        <div className="map-style-buttons">
+          <button
+            className={`map-style-btn ${mapStyle === 'voyager' ? 'active' : ''}`}
+            onClick={() => onMapStyleChange('voyager')}
+          >
+            Street
+          </button>
+          <button
+            className={`map-style-btn ${mapStyle === 'satellite' ? 'active' : ''}`}
+            onClick={() => onMapStyleChange('satellite')}
+          >
+            Satellite
+          </button>
         </div>
-        <div className="ticker-list">
-          {shots.slice(0, 20).map((shot, index) => (
-            <TickerItem key={shot.event_id || `${shot.ts}-${index}`} shot={shot} />
-          ))}
-        </div>
-      </div>
-
-      <div className="connection-status">
-        <div className={`status-dot ${connectionStatus}`} />
-        <span>
-          {connectionStatus === 'connected' && 'Connected'}
-          {connectionStatus === 'connecting' && 'Connecting...'}
-          {connectionStatus === 'disconnected' && 'Disconnected'}
-        </span>
       </div>
     </div>
   );
-}
-
-function TickerItem({ shot }: { shot: ShotEvent }) {
-  const timeAgo = getTimeAgo(shot.ts);
-
-  return (
-    <div className="ticker-item">
-      <div>
-        <span className="city">{shot.city}</span>
-        {shot.country_code && (
-          <span className="country">{shot.country_code}</span>
-        )}
-      </div>
-      <div className="details">
-        {shot.profile} &bull; {shot.machine_model}
-      </div>
-      <div className="time">{timeAgo}</div>
-    </div>
-  );
-}
-
-function getTimeAgo(ts: number): string {
-  const seconds = Math.floor((Date.now() - ts) / 1000);
-
-  if (seconds < 5) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }

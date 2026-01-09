@@ -19,27 +19,27 @@ interface ShotRecord {
   profile?: string;
   beverage_type?: string;
   event_id: string;
-  ts: string;
+  ts: number; // Unix timestamp in milliseconds
 }
 
 export async function handler(): Promise<void> {
-  const now = new Date();
-  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const now = Date.now();
+  const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
 
   // Query shots from the last 24 hours
-  // We need to query each hour partition
+  // Data is partitioned by DAY#YYYY-MM-DD
   const shots: ShotRecord[] = [];
-  const hoursToQuery: string[] = [];
+  const daysToQuery: string[] = [];
 
-  // Generate hour keys for the last 24 hours
-  for (let i = 0; i < 24; i++) {
-    const hourDate = new Date(now.getTime() - i * 60 * 60 * 1000);
-    const hourKey = hourDate.toISOString().slice(0, 13); // "2024-01-08T22"
-    hoursToQuery.push(`HOUR#${hourKey}`);
+  // Generate day keys for today and yesterday (covers last 24 hours)
+  for (let i = 0; i < 2; i++) {
+    const dayDate = new Date(now - i * 24 * 60 * 60 * 1000);
+    const dayKey = dayDate.toISOString().slice(0, 10); // "2026-01-08"
+    daysToQuery.push(`DAY#${dayKey}`);
   }
 
-  // Query each hour partition in parallel
-  const queries = hoursToQuery.map(async (pk) => {
+  // Query each day partition in parallel
+  const queries = daysToQuery.map(async (pk) => {
     try {
       const result = await docClient.send(new QueryCommand({
         TableName: SHOTS_RAW_TABLE,
@@ -47,7 +47,7 @@ export async function handler(): Promise<void> {
         ExpressionAttributeValues: {
           ':pk': pk,
         },
-        Limit: 500, // Cap per hour to avoid runaway costs
+        Limit: 1000, // Cap per day
       }));
       return (result.Items || []) as ShotRecord[];
     } catch (err) {
@@ -63,25 +63,32 @@ export async function handler(): Promise<void> {
 
   // Filter to exactly 24 hours and sort by timestamp descending
   const filteredShots = shots
-    .filter(s => new Date(s.ts) >= twentyFourHoursAgo)
-    .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+    .filter(s => s.ts >= twentyFourHoursAgo)
+    .sort((a, b) => b.ts - a.ts)
     .slice(0, 1000); // Cap at 1000 shots
 
-  // Transform to public format
+  // Transform to minimal format: just coords and age in minutes
   const publicShots = filteredShots.map(s => ({
-    city: s.city,
-    country_code: s.country_code,
     lat: s.lat,
     lon: s.lon,
-    profile: s.profile,
-    beverage_type: s.beverage_type,
-    ts: s.ts,
+    age: Math.round((now - s.ts) / 60000), // age in minutes
   }));
 
+  // Calculate top 10 profiles
+  const profileCounts = new globalThis.Map<string, number>();
+  for (const s of filteredShots) {
+    const profile = s.profile || 'Unknown';
+    profileCounts.set(profile, (profileCounts.get(profile) || 0) + 1);
+  }
+  const topProfiles = Array.from(profileCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, count]) => ({ name, count }));
+
   const output = {
-    generated_at: now.toISOString(),
-    count: publicShots.length,
+    generated_at: new Date(now).toISOString(),
     shots: publicShots,
+    top_profiles: topProfiles,
   };
 
   // Write to S3
