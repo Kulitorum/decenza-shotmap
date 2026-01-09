@@ -7,7 +7,8 @@ A real-time world map showing espresso shots pulled globally. Open to any espres
 - **Frontend**: React + TypeScript + MapLibre GL JS
 - **Backend**: AWS Lambda + API Gateway + DynamoDB
 - **Hosting**: S3 + CloudFront at https://decenza.coffee
-- **Real-time**: WebSocket API for live shot pings
+- **Real-time**: WebSocket API for live shot updates
+- **Map Styles**: Satellite (ESRI) or Street (CARTO Voyager)
 
 ## Quick Start
 
@@ -16,7 +17,6 @@ A real-time world map showing espresso shots pulled globally. Open to any espres
 - Node.js 20+
 - AWS CLI configured with appropriate credentials
 - Terraform 1.5+
-- PowerShell (Windows) or Bash (Linux/Mac)
 
 ### Deploy Infrastructure
 
@@ -28,24 +28,38 @@ terraform init
 terraform apply
 ```
 
+### Deploy Backend
+
+```bash
+cd backend
+npm ci
+npm run build
+# Lambdas are deployed via Terraform
+```
+
 ### Deploy Frontend
 
-```powershell
-# Windows
-.\scripts\deploy_frontend.ps1
-
-# Linux/Mac
-./scripts/deploy_frontend.sh
+```bash
+cd frontend
+npm ci
+npm run build
+aws s3 sync dist s3://<your-bucket-name> --delete
+aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
 ```
 
 ### Test with a Shot Event
 
-```powershell
-# Windows
-.\scripts\send_test_shot.ps1 -ApiUrl "https://api.decenza.coffee" -ApiKey "your-api-key"
-
-# Linux/Mac
-./scripts/send_test_shot.sh "https://api.decenza.coffee" "your-api-key"
+```bash
+curl -X POST https://api.decenza.coffee/v1/shots \
+  -H "Content-Type: application/json" \
+  -d '{
+    "city": "Copenhagen",
+    "country_code": "DK",
+    "profile": "Classic Espresso",
+    "software_name": "MyApp",
+    "software_version": "1.0",
+    "machine_model": "Decent DE1"
+  }'
 ```
 
 ## Project Structure
@@ -55,12 +69,12 @@ decenza.coffee/
 ├── frontend/          # React SPA
 ├── backend/           # Lambda functions
 ├── infra/             # Terraform IaC
-├── scripts/           # Deploy & utility scripts
 └── docs/              # Documentation
 ```
 
-## API
+## API Endpoints
 
+### Shot Ingestion
 POST `https://api.decenza.coffee/v1/shots`
 
 ```json
@@ -74,7 +88,19 @@ POST `https://api.decenza.coffee/v1/shots`
 }
 ```
 
+### Statistics (rolling 24 hours)
+GET `https://api.decenza.coffee/v1/stats`
+
+### Recent Shots
+GET `https://api.decenza.coffee/v1/shots/recent?limit=50`
+
+### Screensaver API (cached, high-traffic)
+GET `https://decenza.coffee/api/shots-latest.json`
+
+Lightweight endpoint for screensavers with thousands of concurrent viewers. Returns minimal data (coords + age) updated every minute.
+
 See [docs/api.md](docs/api.md) for full documentation.
+See [docs/screensaver-api.md](docs/screensaver-api.md) for screensaver integration.
 
 ## Architecture
 

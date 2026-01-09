@@ -12,9 +12,7 @@ The Decenza Shot Map is a real-time visualization platform for espresso shots pu
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                  Internet                                    │
-└─────────────────────────────────────────────────────────────────────────────┘
+                                  Internet
                                       │
                                       ▼
                         ┌─────────────────────────┐
@@ -40,7 +38,8 @@ The Decenza Shot Map is a real-time visualization platform for espresso shots pu
 │                 │       │                 │       │                 │
 │ Static Website  │       │ - ingestShot    │       │ - wsConnect     │
 │ (React SPA)     │       │ - getStats      │       │ - wsDisconnect  │
-│                 │       │ - getRecentShots│       │ - wsMessage     │
+│ + Screensaver   │       │ - getRecentShots│       │ - wsMessage     │
+│   JSON API      │       │ - exportShots   │       │                 │
 └─────────────────┘       └─────────────────┘       └─────────────────┘
                                       │                           │
                                       └─────────┬─────────────────┘
@@ -64,15 +63,27 @@ The Decenza Shot Map is a real-time visualization platform for espresso shots pu
 ### Frontend (decenza.coffee)
 
 - **Technology**: Vite + React + TypeScript
-- **Map**: MapLibre GL JS with OpenStreetMap tiles
+- **Map**: MapLibre GL JS with ESRI World Imagery (satellite) or CARTO Voyager (street) tiles
 - **Hosting**: S3 + CloudFront
 
 Features:
-- Fullscreen world map with pulse animations
-- Live event ticker
-- Statistics (shots today, last hour, top cities/profiles)
+- Fullscreen world map with location dots
+- Shot markers that fade over 24 hours
+- Statistics sidebar (shots last 24h, last hour, top cities/profiles)
+- Map style toggle (Satellite/Street)
 - WebSocket for real-time updates
 - Responsive design
+
+### Screensaver API
+
+Static JSON file served from S3 via CloudFront for high-traffic screensaver clients:
+
+- **Endpoint**: `https://decenza.coffee/api/shots-latest.json`
+- **Update frequency**: Every minute (EventBridge → Lambda → S3)
+- **Format**: Minimal `{lat, lon, age}` + top 10 profiles
+- **Caching**: 30-second CDN cache
+
+This approach handles thousands of concurrent viewers without WebSocket overhead.
 
 ### API (api.decenza.coffee)
 
@@ -81,7 +92,7 @@ HTTP API endpoints:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/shots` | POST | Ingest a new shot event |
-| `/v1/stats` | GET | Get current statistics |
+| `/v1/stats` | GET | Get rolling 24-hour statistics |
 | `/v1/shots/recent` | GET | Get recent shot events |
 
 ### WebSocket (ws.decenza.coffee)
@@ -191,6 +202,14 @@ Short-lived idempotency keys (1 hour TTL).
 7. Broadcast to WebSocket connections
 8. Return response with resolved coordinates
 
+### Screensaver Data Export
+
+1. EventBridge triggers exportShots Lambda every minute
+2. Lambda queries last 24 hours of shots from ShotsRaw
+3. Transforms to minimal format: `{lat, lon, age}` + top 10 profiles
+4. Writes JSON to S3 bucket
+5. CloudFront serves with 30-second cache
+
 ### Real-time Updates
 
 1. Client connects to WebSocket API
@@ -203,9 +222,10 @@ Short-lived idempotency keys (1 hour TTL).
 ### Statistics
 
 1. Client requests `/v1/stats`
-2. Lambda queries ShotsAgg for daily totals
-3. Query recent shots for last-hour count
-4. Return aggregated statistics
+2. Lambda queries ShotsRaw for today and yesterday
+3. Filters to rolling 24-hour window
+4. Calculates top cities and profiles from filtered data
+5. Returns aggregated statistics
 
 ## City Geocoding
 

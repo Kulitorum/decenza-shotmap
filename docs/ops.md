@@ -72,6 +72,7 @@ Log groups:
 - `/aws/lambda/decenza-shotmap-ingest-shot`
 - `/aws/lambda/decenza-shotmap-get-stats`
 - `/aws/lambda/decenza-shotmap-get-recent-shots`
+- `/aws/lambda/decenza-shotmap-export-shots`
 - `/aws/lambda/decenza-shotmap-ws-connect`
 - `/aws/lambda/decenza-shotmap-ws-disconnect`
 - `/aws/lambda/decenza-shotmap-ws-message`

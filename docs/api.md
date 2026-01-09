@@ -99,7 +99,7 @@ curl -X POST https://api.decenza.coffee/v1/shots \
 
 ### GET /v1/stats
 
-Get current statistics.
+Get rolling 24-hour statistics.
 
 **Response (200 OK):**
 ```json
@@ -122,6 +122,15 @@ Get current statistics.
   ]
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| shots_today | number | Shots in the last 24 hours (rolling window) |
+| shots_last_hour | number | Shots in the last 60 minutes |
+| top_cities | array | Top 5 cities by shot count (last 24h) |
+| top_profiles | array | Top 5 profiles by shot count (last 24h) |
+
+Note: Despite the field name `shots_today`, this returns a rolling 24-hour count, not calendar day.
 
 **Example (curl):**
 ```bash
