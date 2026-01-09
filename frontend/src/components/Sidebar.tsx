@@ -21,7 +21,7 @@ export default function Sidebar({ stats, mapStyle, onMapStyleChange, isOpen }: S
         <div className="stats-grid">
           <div className="stat-item">
             <div className="stat-value">{stats.shots_today.toLocaleString()}</div>
-            <div className="stat-label">Shots Today</div>
+            <div className="stat-label">Last 24 Hours</div>
           </div>
           <div className="stat-item">
             <div className="stat-value">{stats.shots_last_hour.toLocaleString()}</div>
@@ -32,7 +32,7 @@ export default function Sidebar({ stats, mapStyle, onMapStyleChange, isOpen }: S
 
       <div className="top-lists">
         <div className="top-list">
-          <h3>Top Cities Today</h3>
+          <h3>Top Cities (24h)</h3>
           {stats.top_cities.length === 0 ? (
             <div className="top-list-item">
               <span className="name" style={{ color: 'var(--color-text-muted)' }}>
@@ -50,7 +50,7 @@ export default function Sidebar({ stats, mapStyle, onMapStyleChange, isOpen }: S
         </div>
 
         <div className="top-list">
-          <h3>Top Profiles Today</h3>
+          <h3>Top Profiles (24h)</h3>
           {stats.top_profiles.length === 0 ? (
             <div className="top-list-item">
               <span className="name" style={{ color: 'var(--color-text-muted)' }}>
