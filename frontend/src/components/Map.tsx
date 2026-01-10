@@ -1,5 +1,6 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
+import Supercluster from 'supercluster';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { ShotEvent } from '../types/shot';
 import type { MapStyle } from './Sidebar';
@@ -9,14 +10,30 @@ interface MapProps {
   mapStyle: MapStyle;
 }
 
-interface AggregatedLocation {
+interface ShotProperties {
+  city: string;
+  profile: string;
+  ts: number;
+}
+
+interface ClusterProperties {
+  cluster: true;
+  cluster_id: number;
+  point_count: number;
+}
+
+type PointFeature = GeoJSON.Feature<GeoJSON.Point, ShotProperties>;
+
+interface AggregatedCluster {
   key: string;
   lat: number;
   lon: number;
-  city: string;
+  cities: globalThis.Map<string, number>; // city -> count
   count: number;
   newestTs: number;
   profiles: globalThis.Map<string, number>; // profile name -> count
+  isCluster: boolean;
+  clusterId?: number;
 }
 
 interface LocationMarker {
@@ -45,50 +62,107 @@ export default function Map({ shots, mapStyle }: MapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<globalThis.Map<string, LocationMarker>>(new globalThis.Map());
   const updateIntervalRef = useRef<number | null>(null);
+  const superclusterRef = useRef<Supercluster<ShotProperties, ClusterProperties> | null>(null);
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
 
-  // Aggregate shots by location (round to ~1km precision)
-  const aggregatedLocations = useMemo(() => {
+  // Filter shots to last 24 hours and create GeoJSON features
+  const geoJsonPoints = useMemo(() => {
     const now = Date.now();
-    const locationMap = new globalThis.Map<string, AggregatedLocation>();
+    const points: PointFeature[] = [];
 
     for (const shot of shots) {
       const ts = new Date(shot.ts).getTime();
       const age = now - ts;
-
-      // Skip shots older than 24 hours
       if (age > TWENTY_FOUR_HOURS) continue;
 
-      // Round coordinates to aggregate nearby shots (~1km)
-      const latKey = Math.round(shot.lat * 100) / 100;
-      const lonKey = Math.round(shot.lon * 100) / 100;
-      const key = `${latKey},${lonKey}`;
-
-      const existing = locationMap.get(key);
-      if (existing) {
-        existing.count++;
-        if (ts > existing.newestTs) {
-          existing.newestTs = ts;
-        }
-        // Track profiles
-        const profile = shot.profile || 'Unknown';
-        existing.profiles.set(profile, (existing.profiles.get(profile) || 0) + 1);
-      } else {
-        const profiles = new globalThis.Map<string, number>();
-        profiles.set(shot.profile || 'Unknown', 1);
-        locationMap.set(key, {
-          key,
-          lat: shot.lat,
-          lon: shot.lon,
+      points.push({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [shot.lon, shot.lat],
+        },
+        properties: {
           city: shot.city,
-          count: 1,
-          newestTs: ts,
+          profile: shot.profile || 'Unknown',
+          ts,
+        },
+      });
+    }
+
+    return points;
+  }, [shots]);
+
+  // Initialize Supercluster
+  useEffect(() => {
+    superclusterRef.current = new Supercluster<ShotProperties, ClusterProperties>({
+      radius: 10, // Cluster radius in pixels - only merge when dots overlap
+      maxZoom: 16,
+      minZoom: 0,
+    });
+    superclusterRef.current.load(geoJsonPoints);
+  }, [geoJsonPoints]);
+
+  // Get clusters for current zoom level
+  const getClusters = useCallback((currentZoom: number): AggregatedCluster[] => {
+    if (!superclusterRef.current) return [];
+
+    const clusters = superclusterRef.current.getClusters([-180, -85, 180, 85], Math.floor(currentZoom));
+    const result: AggregatedCluster[] = [];
+
+    for (const feature of clusters) {
+      const [lon, lat] = feature.geometry.coordinates;
+      const props = feature.properties;
+
+      if ('cluster' in props && props.cluster) {
+        // It's a cluster - get all leaves to aggregate stats
+        const leaves = superclusterRef.current.getLeaves(props.cluster_id, Infinity);
+        const cities = new globalThis.Map<string, number>();
+        const profiles = new globalThis.Map<string, number>();
+        let newestTs = 0;
+
+        for (const leaf of leaves) {
+          const leafProps = leaf.properties as ShotProperties;
+          cities.set(leafProps.city, (cities.get(leafProps.city) || 0) + 1);
+          profiles.set(leafProps.profile, (profiles.get(leafProps.profile) || 0) + 1);
+          if (leafProps.ts > newestTs) newestTs = leafProps.ts;
+        }
+
+        result.push({
+          key: `cluster-${props.cluster_id}`,
+          lat,
+          lon,
+          cities,
+          count: props.point_count,
+          newestTs,
           profiles,
+          isCluster: true,
+          clusterId: props.cluster_id,
+        });
+      } else {
+        // Single point
+        const pointProps = props as ShotProperties;
+        const cities = new globalThis.Map<string, number>();
+        cities.set(pointProps.city, 1);
+        const profiles = new globalThis.Map<string, number>();
+        profiles.set(pointProps.profile, 1);
+
+        result.push({
+          key: `point-${lat}-${lon}-${pointProps.ts}`,
+          lat,
+          lon,
+          cities,
+          count: 1,
+          newestTs: pointProps.ts,
+          profiles,
+          isCluster: false,
         });
       }
     }
 
-    return Array.from(locationMap.values());
-  }, [shots]);
+    return result;
+  }, []);
+
+  const [aggregatedClusters, setAggregatedClusters] = useState<AggregatedCluster[]>([]);
 
   // Build map style object
   const buildStyle = (style: MapStyle): maplibregl.StyleSpecification => {
@@ -116,10 +190,14 @@ export default function Map({ shots, mapStyle }: MapProps) {
     };
   };
 
-  // Build popup HTML content
-  const buildPopupContent = (loc: AggregatedLocation): string => {
+  // Build popup HTML content for clusters
+  const buildPopupContent = (cluster: AggregatedCluster): string => {
+    // Sort cities by count descending
+    const sortedCities = Array.from(cluster.cities.entries())
+      .sort((a, b) => b[1] - a[1]);
+
     // Sort profiles by count descending
-    const sortedProfiles = Array.from(loc.profiles.entries())
+    const sortedProfiles = Array.from(cluster.profiles.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5); // Top 5 profiles
 
@@ -127,9 +205,24 @@ export default function Map({ shots, mapStyle }: MapProps) {
       .map(([name, count]) => `<li>${name}: ${count}</li>`)
       .join('');
 
+    // Build title based on number of cities
+    let titleHtml: string;
+    if (sortedCities.length === 1) {
+      titleHtml = `<div class="shot-popup-title">${sortedCities[0][0]}</div>`;
+    } else if (sortedCities.length <= 3) {
+      // Show all cities
+      const cityNames = sortedCities.map(([name]) => name).join(', ');
+      titleHtml = `<div class="shot-popup-title">${cityNames}</div>`;
+    } else {
+      // Show top 2 cities + "and X more"
+      const topTwo = sortedCities.slice(0, 2).map(([name]) => name).join(', ');
+      const remaining = sortedCities.length - 2;
+      titleHtml = `<div class="shot-popup-title">${topTwo}</div><div class="shot-popup-more">and ${remaining} more location${remaining > 1 ? 's' : ''}</div>`;
+    }
+
     return `
-      <div class="shot-popup-title">${loc.city}</div>
-      <div class="shot-popup-count">${loc.count} shot${loc.count > 1 ? 's' : ''}</div>
+      ${titleHtml}
+      <div class="shot-popup-count">${cluster.count} shot${cluster.count > 1 ? 's' : ''}</div>
       <div class="shot-popup-profiles">
         Profiles:
         <ul>${profileList}</ul>
@@ -152,7 +245,16 @@ export default function Map({ shots, mapStyle }: MapProps) {
 
     mapRef.current = map;
 
+    // Track zoom changes for clustering
+    const handleZoom = () => {
+      setZoom(map.getZoom());
+    };
+    map.on('zoomend', handleZoom);
+    map.on('moveend', handleZoom);
+
     return () => {
+      map.off('zoomend', handleZoom);
+      map.off('moveend', handleZoom);
       if (updateIntervalRef.current) {
         clearInterval(updateIntervalRef.current);
       }
@@ -172,13 +274,19 @@ export default function Map({ shots, mapStyle }: MapProps) {
     mapRef.current.setStyle(buildStyle(mapStyle));
   }, [mapStyle]);
 
-  // Update markers when aggregated locations change
+  // Update clusters when zoom or data changes
+  useEffect(() => {
+    if (!superclusterRef.current) return;
+    setAggregatedClusters(getClusters(zoom));
+  }, [zoom, geoJsonPoints, getClusters]);
+
+  // Update markers when clusters change
   useEffect(() => {
     if (!mapRef.current) return;
 
     const map = mapRef.current;
     const existingKeys = new Set(markersRef.current.keys());
-    const newKeys = new Set(aggregatedLocations.map(loc => loc.key));
+    const newKeys = new Set(aggregatedClusters.map(c => c.key));
 
     // Remove markers that no longer exist
     for (const key of existingKeys) {
@@ -194,21 +302,22 @@ export default function Map({ shots, mapStyle }: MapProps) {
 
     // Add or update markers
     const now = Date.now();
-    for (const loc of aggregatedLocations) {
-      const age = now - loc.newestTs;
+    for (const cluster of aggregatedClusters) {
+      const age = now - cluster.newestTs;
       const opacity = Math.max(0.15, 1 - (age / TWENTY_FOUR_HOURS) * 0.85);
-      const size = Math.min(24, 12 + (loc.count * 2)); // Size based on count
+      const size = Math.min(32, 12 + Math.sqrt(cluster.count) * 4); // Size based on count
 
-      const existing = markersRef.current.get(loc.key);
+      const existing = markersRef.current.get(cluster.key);
       if (existing) {
         // Update opacity, size, and popup content
         existing.element.style.opacity = String(opacity);
         existing.element.style.setProperty('--dot-size', `${size}px`);
-        existing.popup.setHTML(buildPopupContent(loc));
+        existing.popup.setHTML(buildPopupContent(cluster));
+        existing.popup.setOffset([0, -size / 2 - 5]);
       } else {
         // Create new marker
         const el = document.createElement('div');
-        el.className = 'location-dot';
+        el.className = cluster.isCluster ? 'location-dot cluster' : 'location-dot';
         el.style.opacity = String(opacity);
         el.style.setProperty('--dot-size', `${size}px`);
 
@@ -218,36 +327,50 @@ export default function Map({ shots, mapStyle }: MapProps) {
           closeOnClick: false,
           className: 'shot-popup',
           offset: [0, -size / 2 - 5],
-        }).setHTML(buildPopupContent(loc));
+        }).setHTML(buildPopupContent(cluster));
 
         // Show popup on hover
         el.addEventListener('mouseenter', () => {
-          popup.setLngLat([loc.lon, loc.lat]).addTo(map);
+          popup.setLngLat([cluster.lon, cluster.lat]).addTo(map);
         });
         el.addEventListener('mouseleave', () => {
           popup.remove();
         });
 
+        // Click to zoom into cluster
+        if (cluster.isCluster && cluster.clusterId !== undefined) {
+          el.style.cursor = 'pointer';
+          el.addEventListener('click', () => {
+            if (superclusterRef.current && cluster.clusterId !== undefined) {
+              const expansionZoom = superclusterRef.current.getClusterExpansionZoom(cluster.clusterId);
+              map.easeTo({
+                center: [cluster.lon, cluster.lat],
+                zoom: Math.min(expansionZoom, 16),
+              });
+            }
+          });
+        }
+
         const marker = new maplibregl.Marker({
           element: el,
           anchor: 'center',
         })
-          .setLngLat([loc.lon, loc.lat])
+          .setLngLat([cluster.lon, cluster.lat])
           .addTo(map);
 
-        markersRef.current.set(loc.key, { marker, element: el, popup });
+        markersRef.current.set(cluster.key, { marker, element: el, popup });
       }
     }
-  }, [aggregatedLocations]);
+  }, [aggregatedClusters]);
 
   // Periodically update opacity based on age
   useEffect(() => {
     updateIntervalRef.current = window.setInterval(() => {
       const now = Date.now();
-      for (const loc of aggregatedLocations) {
-        const data = markersRef.current.get(loc.key);
+      for (const cluster of aggregatedClusters) {
+        const data = markersRef.current.get(cluster.key);
         if (data) {
-          const age = now - loc.newestTs;
+          const age = now - cluster.newestTs;
           const opacity = Math.max(0.15, 1 - (age / TWENTY_FOUR_HOURS) * 0.85);
           data.element.style.opacity = String(opacity);
         }
@@ -259,7 +382,7 @@ export default function Map({ shots, mapStyle }: MapProps) {
         clearInterval(updateIntervalRef.current);
       }
     };
-  }, [aggregatedLocations]);
+  }, [aggregatedClusters]);
 
   const resetView = () => {
     if (mapRef.current) {

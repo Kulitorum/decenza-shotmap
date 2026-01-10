@@ -320,8 +320,15 @@
 .shot-popup-title {
   font-weight: 600;
   font-size: 0.95rem;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   color: var(--color-accent);
+}
+
+.shot-popup-more {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+  font-style: italic;
 }
 
 .shot-popup-count {
