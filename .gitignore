@@ -45,3 +45,4 @@ coverage/
 
 # AWS SAM
 .aws-sam/
+tmpclaude-*
