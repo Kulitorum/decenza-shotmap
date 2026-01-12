@@ -1,6 +1,21 @@
 import type { Stats } from '../types/shot';
 
-export type MapStyle = 'voyager' | 'satellite';
+export type MapStyle =
+  | 'voyager'
+  | 'positron'
+  | 'dark-matter'
+  | 'satellite'
+  | 'esri-topo'
+  | 'osm';
+
+export const MAP_STYLE_LABELS: Record<MapStyle, string> = {
+  'voyager': 'Street (CARTO Voyager)',
+  'positron': 'Light (CARTO Positron)',
+  'dark-matter': 'Dark (CARTO Dark Matter)',
+  'satellite': 'Satellite (ESRI)',
+  'esri-topo': 'Topographic (ESRI)',
+  'osm': 'OpenStreetMap',
+};
 
 interface SidebarProps {
   stats: Stats;
@@ -70,20 +85,17 @@ export default function Sidebar({ stats, mapStyle, onMapStyleChange, isOpen }: S
 
       <div className="map-style-section">
         <h3>Map Style</h3>
-        <div className="map-style-buttons">
-          <button
-            className={`map-style-btn ${mapStyle === 'voyager' ? 'active' : ''}`}
-            onClick={() => onMapStyleChange('voyager')}
-          >
-            Street
-          </button>
-          <button
-            className={`map-style-btn ${mapStyle === 'satellite' ? 'active' : ''}`}
-            onClick={() => onMapStyleChange('satellite')}
-          >
-            Satellite
-          </button>
-        </div>
+        <select
+          className="map-style-select"
+          value={mapStyle}
+          onChange={(e) => onMapStyleChange(e.target.value as MapStyle)}
+        >
+          {(Object.keys(MAP_STYLE_LABELS) as MapStyle[]).map((key) => (
+            <option key={key} value={key}>
+              {MAP_STYLE_LABELS[key]}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );

@@ -133,14 +133,30 @@ interface LocationMarker {
   popup: maplibregl.Popup;
 }
 
-const TILE_SOURCES = {
+const TILE_SOURCES: Record<string, { url: string; attribution: string }> = {
   voyager: {
     url: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  positron: {
+    url: 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  'dark-matter': {
+    url: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
   },
   satellite: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
+  },
+  'esri-topo': {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
+  },
+  osm: {
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   },
 };
 
@@ -372,66 +388,66 @@ export default function Map({ shots, mapStyle }: MapProps) {
     const map = mapRef.current;
     if (!map) return;
 
-    const updateDayNightLayer = () => {
+    const sourceId = 'day-night-source';
+    const layerId = 'day-night-layer';
+
+    const addDayNightLayer = () => {
       if (!map.isStyleLoaded()) return;
+      // Don't add if already exists
+      if (map.getSource(sourceId)) return;
 
-      const sourceId = 'day-night-source';
-      const layerId = 'day-night-layer';
+      const geojson = generateTerminatorPolygon(new Date());
+      map.addSource(sourceId, {
+        type: 'geojson',
+        data: geojson,
+      });
+      map.addLayer({
+        id: layerId,
+        type: 'fill',
+        source: sourceId,
+        paint: {
+          'fill-color': '#000022',
+          'fill-opacity': 0.4,
+        },
+      });
+    };
 
-      if (showDayNight) {
-        const geojson = generateTerminatorPolygon(new Date());
-
-        if (map.getSource(sourceId)) {
-          (map.getSource(sourceId) as maplibregl.GeoJSONSource).setData(geojson);
-        } else {
-          map.addSource(sourceId, {
-            type: 'geojson',
-            data: geojson,
-          });
-          map.addLayer({
-            id: layerId,
-            type: 'fill',
-            source: sourceId,
-            paint: {
-              'fill-color': '#000022',
-              'fill-opacity': 0.4,
-            },
-          });
-        }
-      } else {
-        if (map.getLayer(layerId)) {
-          map.removeLayer(layerId);
-        }
-        if (map.getSource(sourceId)) {
-          map.removeSource(sourceId);
-        }
+    const removeDayNightLayer = () => {
+      if (map.getLayer(layerId)) {
+        map.removeLayer(layerId);
+      }
+      if (map.getSource(sourceId)) {
+        map.removeSource(sourceId);
       }
     };
 
-    // Wait for style to load before adding layer
-    if (map.isStyleLoaded()) {
-      updateDayNightLayer();
-    } else {
-      map.once('style.load', updateDayNightLayer);
-    }
-
-    // Update every minute for real-time accuracy
     if (showDayNight) {
+      // Always listen for style.load to re-add layer after style changes
+      const onStyleLoad = () => addDayNightLayer();
+      map.on('style.load', onStyleLoad);
+
+      // Also add immediately if style is already loaded
+      addDayNightLayer();
+
+      // Update every minute for real-time accuracy
       dayNightIntervalRef.current = window.setInterval(() => {
-        if (map.isStyleLoaded() && map.getSource('day-night-source')) {
+        if (map.isStyleLoaded() && map.getSource(sourceId)) {
           const geojson = generateTerminatorPolygon(new Date());
-          (map.getSource('day-night-source') as maplibregl.GeoJSONSource).setData(geojson);
+          (map.getSource(sourceId) as maplibregl.GeoJSONSource).setData(geojson);
         }
       }, 60000);
-    }
 
-    return () => {
-      if (dayNightIntervalRef.current) {
-        clearInterval(dayNightIntervalRef.current);
-        dayNightIntervalRef.current = null;
-      }
-    };
-  }, [showDayNight, mapStyle]);
+      return () => {
+        map.off('style.load', onStyleLoad);
+        if (dayNightIntervalRef.current) {
+          clearInterval(dayNightIntervalRef.current);
+          dayNightIntervalRef.current = null;
+        }
+      };
+    } else {
+      removeDayNightLayer();
+    }
+  }, [showDayNight]);
 
   // Update clusters when zoom or data changes
   useEffect(() => {
