@@ -5,6 +5,97 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { ShotEvent } from '../types/shot';
 import type { MapStyle } from './Sidebar';
 
+// Solar terminator calculation - computes day/night boundary on Earth
+function getSunPosition(date: Date): { declination: number; hourAngle: number } {
+  // Days since J2000.0 epoch (Jan 1, 2000 12:00 UTC)
+  const jd = date.getTime() / 86400000 + 2440587.5;
+  const n = jd - 2451545.0;
+
+  // Mean longitude of the Sun (degrees)
+  const L = (280.460 + 0.9856474 * n) % 360;
+  // Mean anomaly of the Sun (degrees)
+  const g = ((357.528 + 0.9856003 * n) % 360) * Math.PI / 180;
+
+  // Ecliptic longitude (degrees)
+  const lambda = L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g);
+  // Obliquity of the ecliptic (degrees)
+  const epsilon = 23.439 - 0.0000004 * n;
+
+  // Sun's declination
+  const declination = Math.asin(
+    Math.sin(epsilon * Math.PI / 180) * Math.sin(lambda * Math.PI / 180)
+  ) * 180 / Math.PI;
+
+  // Greenwich Mean Sidereal Time (hours)
+  const gmst = (18.697374558 + 24.06570982441908 * n) % 24;
+  // Sun's right ascension (hours)
+  const ra = Math.atan2(
+    Math.cos(epsilon * Math.PI / 180) * Math.sin(lambda * Math.PI / 180),
+    Math.cos(lambda * Math.PI / 180)
+  ) * 180 / Math.PI / 15;
+
+  // Hour angle (degrees) - where the sun is relative to Greenwich
+  const hourAngle = (gmst - ra) * 15;
+
+  return { declination, hourAngle };
+}
+
+function generateTerminatorPolygon(date: Date): GeoJSON.Feature<GeoJSON.Polygon> {
+  const { declination, hourAngle } = getSunPosition(date);
+  const decRad = declination * Math.PI / 180;
+
+  // Generate points along the terminator (day/night boundary)
+  const points: [number, number][] = [];
+
+  // The terminator is where the sun is at the horizon
+  // For each longitude, calculate the latitude where sun elevation = 0
+  for (let lon = -180; lon <= 180; lon += 2) {
+    // Hour angle at this longitude
+    const ha = (hourAngle + lon) * Math.PI / 180;
+
+    // Latitude where sun is at horizon (elevation = 0)
+    // sin(elevation) = sin(lat)*sin(dec) + cos(lat)*cos(dec)*cos(ha) = 0
+    // tan(lat) = -cos(ha) / tan(dec)
+    let lat: number;
+    if (Math.abs(declination) < 0.001) {
+      // Equinox - terminator is a great circle through poles
+      lat = Math.atan(-Math.cos(ha) / 0.001) * 180 / Math.PI;
+    } else {
+      lat = Math.atan(-Math.cos(ha) / Math.tan(decRad)) * 180 / Math.PI;
+    }
+
+    // Clamp latitude to valid range
+    lat = Math.max(-90, Math.min(90, lat));
+    points.push([lon, lat]);
+  }
+
+  // Build the night polygon
+  // The night region is always bounded by the terminator and the polar night pole
+  // Polar night pole: South pole when declination >= 0 (northern summer),
+  //                   North pole when declination < 0 (northern winter)
+  const nightPoints: [number, number][] = [];
+  const polarNightLat = declination >= 0 ? -90 : 90;
+
+  // Start from the terminator
+  for (const p of points) {
+    nightPoints.push(p);
+  }
+
+  // Close via the polar night pole
+  nightPoints.push([180, polarNightLat]);
+  nightPoints.push([-180, polarNightLat]);
+  nightPoints.push(points[0]); // Close the polygon
+
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: {
+      type: 'Polygon',
+      coordinates: [nightPoints],
+    },
+  };
+}
+
 interface MapProps {
   shots: ShotEvent[];
   mapStyle: MapStyle;
@@ -64,6 +155,8 @@ export default function Map({ shots, mapStyle }: MapProps) {
   const updateIntervalRef = useRef<number | null>(null);
   const superclusterRef = useRef<Supercluster<ShotProperties, ClusterProperties> | null>(null);
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  const [showDayNight, setShowDayNight] = useState(false);
+  const dayNightIntervalRef = useRef<number | null>(null);
 
   // Filter shots to last 24 hours and create GeoJSON features
   const geoJsonPoints = useMemo(() => {
@@ -274,6 +367,72 @@ export default function Map({ shots, mapStyle }: MapProps) {
     mapRef.current.setStyle(buildStyle(mapStyle));
   }, [mapStyle]);
 
+  // Manage day/night overlay
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const updateDayNightLayer = () => {
+      if (!map.isStyleLoaded()) return;
+
+      const sourceId = 'day-night-source';
+      const layerId = 'day-night-layer';
+
+      if (showDayNight) {
+        const geojson = generateTerminatorPolygon(new Date());
+
+        if (map.getSource(sourceId)) {
+          (map.getSource(sourceId) as maplibregl.GeoJSONSource).setData(geojson);
+        } else {
+          map.addSource(sourceId, {
+            type: 'geojson',
+            data: geojson,
+          });
+          map.addLayer({
+            id: layerId,
+            type: 'fill',
+            source: sourceId,
+            paint: {
+              'fill-color': '#000022',
+              'fill-opacity': 0.4,
+            },
+          });
+        }
+      } else {
+        if (map.getLayer(layerId)) {
+          map.removeLayer(layerId);
+        }
+        if (map.getSource(sourceId)) {
+          map.removeSource(sourceId);
+        }
+      }
+    };
+
+    // Wait for style to load before adding layer
+    if (map.isStyleLoaded()) {
+      updateDayNightLayer();
+    } else {
+      map.once('style.load', updateDayNightLayer);
+    }
+
+    // Update every minute for real-time accuracy
+    if (showDayNight) {
+      dayNightIntervalRef.current = window.setInterval(() => {
+        if (map.isStyleLoaded() && map.getSource('day-night-source')) {
+          const geojson = generateTerminatorPolygon(new Date());
+          (map.getSource('day-night-source') as maplibregl.GeoJSONSource).setData(geojson);
+        }
+      }, 60000);
+    }
+
+    return () => {
+      if (dayNightIntervalRef.current) {
+        clearInterval(dayNightIntervalRef.current);
+        dayNightIntervalRef.current = null;
+      }
+    };
+  }, [showDayNight, mapStyle]);
+
   // Update clusters when zoom or data changes
   useEffect(() => {
     if (!superclusterRef.current) return;
@@ -399,6 +558,13 @@ export default function Map({ shots, mapStyle }: MapProps) {
       <div className="map-controls">
         <button className="map-control-btn" onClick={resetView} title="Reset view">
           ⌂
+        </button>
+        <button
+          className={`map-control-btn${showDayNight ? ' active' : ''}`}
+          onClick={() => setShowDayNight(!showDayNight)}
+          title="Toggle day/night overlay"
+        >
+          ◐
         </button>
       </div>
     </div>

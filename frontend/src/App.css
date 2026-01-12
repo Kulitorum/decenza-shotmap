@@ -303,6 +303,12 @@
   background: var(--color-bg-tertiary);
 }
 
+.map-control-btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #1a1a1a;
+}
+
 /* Shot popup */
 .shot-popup .maplibregl-popup-content {
   background: var(--color-bg-secondary);
