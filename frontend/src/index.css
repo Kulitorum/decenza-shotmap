@@ -26,4 +26,5 @@ body {
   --color-accent-light: #e8c9a8;
   --color-pulse: #d4a574;
   --sidebar-width: 320px;
+  --sidebar-width-mobile: 280px;
 }

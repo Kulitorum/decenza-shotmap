@@ -15,7 +15,7 @@ const MAX_RECENT_SHOTS = 100;
 
 function App() {
   const [recentShots, setRecentShots] = useState<ShotEvent[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
   const [mapStyle, setMapStyle] = useState<MapStyle>('satellite');
 
   // Add new shot to the list
@@ -70,9 +70,9 @@ function App() {
       <button
         className="sidebar-toggle"
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        style={{ display: window.innerWidth <= 768 ? 'block' : 'none' }}
+        aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
       >
-        {sidebarOpen ? 'Close' : 'Stats'}
+        {sidebarOpen ? '✕' : '☰'}
       </button>
 
       <Sidebar
