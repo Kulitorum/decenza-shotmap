@@ -6,8 +6,8 @@ resource "aws_apigatewayv2_api" "http" {
 
   cors_configuration {
     allow_origins = ["*"]
-    allow_methods = ["GET", "POST", "OPTIONS"]
-    allow_headers = ["Content-Type", "x-api-key"]
+    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_headers = ["Content-Type", "x-api-key", "X-Device-Id"]
     max_age       = 86400
   }
 
@@ -110,6 +110,188 @@ resource "aws_lambda_permission" "get_recent_shots" {
   statement_id  = "AllowAPIGateway"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.get_recent_shots.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+# POST /v1/crash-report
+resource "aws_apigatewayv2_integration" "crash_report" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.crash_report.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "post_crash_report" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "POST /v1/crash-report"
+  target             = "integrations/${aws_apigatewayv2_integration.crash_report.id}"
+  authorization_type = "NONE"
+}
+
+resource "aws_lambda_permission" "crash_report" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.crash_report.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+# POST /v1/library/entries
+resource "aws_apigatewayv2_integration" "library_create" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.library_create.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "post_library_entries" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "POST /v1/library/entries"
+  target             = "integrations/${aws_apigatewayv2_integration.library_create.id}"
+  authorization_type = "NONE"
+}
+
+resource "aws_lambda_permission" "library_create" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.library_create.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+# GET /v1/library/entries
+resource "aws_apigatewayv2_integration" "library_list" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.library_list.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "get_library_entries" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = "GET /v1/library/entries"
+  target    = "integrations/${aws_apigatewayv2_integration.library_list.id}"
+}
+
+resource "aws_lambda_permission" "library_list" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.library_list.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+# GET /v1/library/entries/{id}
+resource "aws_apigatewayv2_integration" "library_get" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.library_get.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "get_library_entry" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = "GET /v1/library/entries/{id}"
+  target    = "integrations/${aws_apigatewayv2_integration.library_get.id}"
+}
+
+resource "aws_lambda_permission" "library_get" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.library_get.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+# POST /v1/library/entries/{id}/download
+resource "aws_apigatewayv2_integration" "library_download" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.library_download.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "post_library_download" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "POST /v1/library/entries/{id}/download"
+  target             = "integrations/${aws_apigatewayv2_integration.library_download.id}"
+  authorization_type = "NONE"
+}
+
+resource "aws_lambda_permission" "library_download" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.library_download.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+# DELETE /v1/library/entries/{id}
+resource "aws_apigatewayv2_integration" "library_delete" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.library_delete.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "delete_library_entry" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "DELETE /v1/library/entries/{id}"
+  target             = "integrations/${aws_apigatewayv2_integration.library_delete.id}"
+  authorization_type = "NONE"
+}
+
+resource "aws_lambda_permission" "library_delete" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.library_delete.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+# POST /v1/library/entries/{id}/flag
+resource "aws_apigatewayv2_integration" "library_flag" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.library_flag.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "post_library_flag" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "POST /v1/library/entries/{id}/flag"
+  target             = "integrations/${aws_apigatewayv2_integration.library_flag.id}"
+  authorization_type = "NONE"
+}
+
+resource "aws_lambda_permission" "library_flag" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.library_flag.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+# PUT /v1/library/entries/{id}/thumbnail
+resource "aws_apigatewayv2_integration" "library_thumbnail" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.library_thumbnail.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "put_library_thumbnail" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "PUT /v1/library/entries/{id}/thumbnail"
+  target             = "integrations/${aws_apigatewayv2_integration.library_thumbnail.id}"
+  authorization_type = "NONE"
+}
+
+resource "aws_lambda_permission" "library_thumbnail" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.library_thumbnail.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
 }

@@ -90,3 +90,129 @@ export function validateWsMessage(data: unknown): {
   const errors = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`);
   return { success: false, error: errors.join('; ') };
 }
+
+/** Maximum string lengths for crash report */
+const MAX_VERSION_CR = 50;
+const MAX_DEVICE = 100;
+const MAX_CRASH_LOG = 50000;
+const MAX_USER_NOTES = 2000;
+const MAX_DEBUG_LOG = 10000;
+
+/** Crash report input schema */
+export const crashReportInputSchema = z.object({
+  version: z.string()
+    .min(1, 'version is required')
+    .max(MAX_VERSION_CR, `version must be at most ${MAX_VERSION_CR} characters`)
+    .transform(normalizeString),
+  platform: z.enum(['android', 'ios', 'windows', 'macos', 'linux']),
+  device: z.string()
+    .max(MAX_DEVICE, `device must be at most ${MAX_DEVICE} characters`)
+    .transform(normalizeString)
+    .optional(),
+  crash_log: z.string()
+    .min(1, 'crash_log is required')
+    .max(MAX_CRASH_LOG, `crash_log must be at most ${MAX_CRASH_LOG} characters`),
+  user_notes: z.string()
+    .max(MAX_USER_NOTES, `user_notes must be at most ${MAX_USER_NOTES} characters`)
+    .optional(),
+  debug_log_tail: z.string()
+    .max(MAX_DEBUG_LOG, `debug_log_tail must be at most ${MAX_DEBUG_LOG} characters`)
+    .optional(),
+});
+
+export type ValidatedCrashReportInput = z.infer<typeof crashReportInputSchema>;
+
+/** Validate crash report input */
+export function validateCrashReportInput(data: unknown): {
+  success: true;
+  data: ValidatedCrashReportInput;
+} | {
+  success: false;
+  error: string;
+} {
+  const result = crashReportInputSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  const errors = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`);
+  return { success: false, error: errors.join('; ') };
+}
+
+// ============ Library ============
+
+const MAX_LIBRARY_NAME = 100;
+const MAX_LIBRARY_DESCRIPTION = 500;
+const MAX_LIBRARY_TYPE = 50;
+const MAX_LIBRARY_TAG = 50;
+const MAX_LIBRARY_TAGS = 20;
+const MAX_LIBRARY_APP_VERSION = 50;
+const MAX_LIBRARY_DATA_SIZE = 102400; // 100KB
+
+/** Library entry input schema */
+export const libraryEntryInputSchema = z.object({
+  version: z.number().int().min(1).max(100),
+  type: z.string()
+    .min(1, 'type is required')
+    .max(MAX_LIBRARY_TYPE)
+    .transform(normalizeString),
+  name: z.string()
+    .min(1, 'name is required')
+    .max(MAX_LIBRARY_NAME)
+    .transform(normalizeString),
+  description: z.string()
+    .max(MAX_LIBRARY_DESCRIPTION)
+    .transform(normalizeString)
+    .default(''),
+  tags: z.array(
+    z.string().max(MAX_LIBRARY_TAG).transform(normalizeString)
+  ).max(MAX_LIBRARY_TAGS).default([]),
+  appVersion: z.string()
+    .min(1, 'appVersion is required')
+    .max(MAX_LIBRARY_APP_VERSION)
+    .transform(normalizeString),
+  data: z.record(z.unknown()).refine(
+    (d) => JSON.stringify(d).length <= MAX_LIBRARY_DATA_SIZE,
+    `data must be at most ${MAX_LIBRARY_DATA_SIZE} bytes when serialized`
+  ),
+});
+
+export type ValidatedLibraryEntryInput = z.infer<typeof libraryEntryInputSchema>;
+
+/** Validate library entry input */
+export function validateLibraryEntryInput(data: unknown): {
+  success: true;
+  data: ValidatedLibraryEntryInput;
+} | {
+  success: false;
+  error: string;
+} {
+  const result = libraryEntryInputSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  const errors = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`);
+  return { success: false, error: errors.join('; ') };
+}
+
+/** Library flag input schema */
+export const libraryFlagInputSchema = z.object({
+  reason: z.enum(['inappropriate', 'spam', 'broken']),
+});
+
+export type ValidatedLibraryFlagInput = z.infer<typeof libraryFlagInputSchema>;
+
+/** Validate library flag input */
+export function validateLibraryFlagInput(data: unknown): {
+  success: true;
+  data: ValidatedLibraryFlagInput;
+} | {
+  success: false;
+  error: string;
+} {
+  const result = libraryFlagInputSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  const errors = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`);
+  return { success: false, error: errors.join('; ') };
+}

@@ -40,6 +40,8 @@ The Decenza Shot Map is a real-time visualization platform for espresso shots pu
 │ (React SPA)     │       │ - getStats      │       │ - wsDisconnect  │
 │ + Screensaver   │       │ - getRecentShots│       │ - wsMessage     │
 │   JSON API      │       │ - exportShots   │       │                 │
+│ + Library       │       │ - crashReport   │       │                 │
+│   Thumbnails    │       │ - library* (x7) │       │                 │
 └─────────────────┘       └─────────────────┘       └─────────────────┘
                                       │                           │
                                       └─────────┬─────────────────┘
@@ -52,9 +54,13 @@ The Decenza Shot Map is a real-time visualization platform for espresso shots pu
                           │ │ShotsRaw │  │ShotsAgg │  │ Cities  │  │
                           │ └─────────┘  └─────────┘  └─────────┘  │
                           │                                         │
-                          │ ┌─────────────┐  ┌──────────────────┐  │
-                          │ │WsConnections│  │   Idempotency    │  │
-                          │ └─────────────┘  └──────────────────┘  │
+                          │ ┌─────────────┐  ┌─────────────┐       │
+                          │ │WsConnections│  │ Idempotency │       │
+                          │ └─────────────┘  └─────────────┘       │
+                          │                                         │
+                          │ ┌─────────────┐  ┌─────────────┐       │
+                          │ │  RateLimit  │  │   Library   │       │
+                          │ └─────────────┘  └─────────────┘       │
                           └─────────────────────────────────────────┘
 ```
 
@@ -94,6 +100,14 @@ HTTP API endpoints:
 | `/v1/shots` | POST | Ingest a new shot event |
 | `/v1/stats` | GET | Get rolling 24-hour statistics |
 | `/v1/shots/recent` | GET | Get recent shot events |
+| `/v1/crash-report` | POST | Submit crash report (creates GitHub issue) |
+| `/v1/library/entries` | POST | Upload a library entry (widget/zone/layout) |
+| `/v1/library/entries` | GET | Browse/search library entries |
+| `/v1/library/entries/{id}` | GET | Get single entry with full data |
+| `/v1/library/entries/{id}/download` | POST | Record a download (import) |
+| `/v1/library/entries/{id}` | DELETE | Delete own entry |
+| `/v1/library/entries/{id}/flag` | POST | Report an entry |
+| `/v1/library/entries/{id}/thumbnail` | PUT | Upload PNG thumbnail |
 
 ### WebSocket (ws.decenza.coffee)
 
@@ -189,6 +203,43 @@ Short-lived idempotency keys (1 hour TTL).
 | event_id | String | Associated event ID |
 | ttl | Number | TTL |
 
+#### RateLimit Table
+
+Rate limiting for crash reports and library uploads (1 hour window).
+
+| Key | Type | Description |
+|-----|------|-------------|
+| pk | String | `RATELIMIT#<key>` (e.g., IP, `LIBUPLOAD#<deviceId>`, `LIBFLAG#<ip>`) |
+| count | Number | Request count in current window |
+| window_start | Number | Window start timestamp (epoch seconds) |
+| ttl | Number | TTL for automatic cleanup |
+
+#### Library Table
+
+Widget/layout library entries shared by the community.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| id | String (PK) | UUID |
+| version | Number | Entry format version |
+| type | String | Entry type (item, zone, layout, etc.) |
+| name | String | Display name |
+| description | String | Description |
+| tags | List | Searchable tags (variables, actions, etc.) |
+| appVersion | String | App version that created this entry |
+| data | String | JSON-serialized opaque data (max 100KB) |
+| deviceId | String | Uploader's device UUID |
+| downloads | Number | Download count |
+| flagCount | Number | Flag/report count |
+| hasThumbnail | Boolean | Whether a thumbnail has been uploaded |
+| createdAt | String | ISO 8601 timestamp |
+
+**GSIs:**
+- **GSI1**: `type` (hash) + `createdAt` (range) - Browse by type
+- **GSI2**: `deviceId` (hash) + `createdAt` (range) - My uploads
+
+**Thumbnails** stored in S3 at `library/thumbnails/{id}.png`, served via CloudFront.
+
 ## Data Flow
 
 ### Shot Ingestion
@@ -226,6 +277,28 @@ Short-lived idempotency keys (1 hour TTL).
 3. Filters to rolling 24-hour window
 4. Calculates top cities and profiles from filtered data
 5. Returns aggregated statistics
+
+### Crash Reporting
+
+1. DE1 app POSTs crash report to `/v1/crash-report`
+2. Lambda validates input with Zod schema
+3. Check rate limit (10 requests/hour per IP) via RateLimit table
+4. Extract crash signature (signal type + stack frames)
+5. Search GitHub for existing open issues with similar signature
+6. If similar issue found: add comment to existing issue
+7. If no similar issue: create new GitHub issue with labels `crash`, `auto-reported`
+8. Return issue URL to client
+
+### Widget Library
+
+1. Client POSTs entry JSON to `/v1/library/entries` with `X-Device-Id` header
+2. Lambda validates, generates UUID, stores in Library table
+3. Client PUTs PNG thumbnail to `/v1/library/entries/{id}/thumbnail`
+4. Lambda validates PNG, uploads to S3 (`library/thumbnails/{id}.png`), sets `hasThumbnail=true`
+5. Other clients GET `/v1/library/entries` to browse (metadata + thumbnail URLs, no data)
+6. Client GETs `/v1/library/entries/{id}` for full entry data on import
+7. Client POSTs to `/v1/library/entries/{id}/download` to record actual import
+8. Owner can DELETE `/v1/library/entries/{id}` (verified by X-Device-Id match)
 
 ## City Geocoding
 

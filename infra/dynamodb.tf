@@ -102,3 +102,65 @@ resource "aws_dynamodb_table" "idempotency" {
 
   tags = local.common_tags
 }
+
+# Rate limiting table
+resource "aws_dynamodb_table" "rate_limit" {
+  name         = "${local.project_name}-rate-limit"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
+  tags = local.common_tags
+}
+
+# Library entries table - widget/layout sharing
+resource "aws_dynamodb_table" "library" {
+  name         = "${local.project_name}-library"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "type"
+    type = "S"
+  }
+
+  attribute {
+    name = "deviceId"
+    type = "S"
+  }
+
+  attribute {
+    name = "createdAt"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "GSI1"
+    hash_key        = "type"
+    range_key       = "createdAt"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "GSI2"
+    hash_key        = "deviceId"
+    range_key       = "createdAt"
+    projection_type = "ALL"
+  }
+
+  tags = local.common_tags
+}

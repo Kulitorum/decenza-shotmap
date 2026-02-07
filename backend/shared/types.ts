@@ -105,3 +105,102 @@ export interface ShotAggRecord {
   count: number;
   last_ts: number;
 }
+
+/** Crash report input from DE1 app */
+export interface CrashReportInput {
+  version: string;
+  platform: 'android' | 'ios' | 'windows' | 'macos' | 'linux';
+  device?: string;
+  crash_log: string;
+  user_notes?: string;
+  debug_log_tail?: string;
+}
+
+/** Crash report response */
+export interface CrashReportResponse {
+  success: boolean;
+  issue_url?: string;
+  error?: string;
+}
+
+/** Rate limit record in DynamoDB */
+export interface RateLimitRecord {
+  pk: string;  // RATELIMIT#<ip>
+  count: number;
+  window_start: number;
+  ttl: number;
+}
+
+// ============ Library ============
+
+/** Library entry as submitted by the client */
+export interface LibraryEntryInput {
+  version: number;
+  type: string;
+  name: string;
+  description: string;
+  tags: string[];
+  appVersion: string;
+  data: Record<string, unknown>;
+}
+
+/** Library entry as stored in DynamoDB */
+export interface LibraryEntryRecord {
+  id: string;
+  version: number;
+  type: string;
+  name: string;
+  description: string;
+  tags: string[];
+  appVersion: string;
+  data: string;           // JSON-serialized
+  deviceId: string;
+  downloads: number;
+  flagCount: number;
+  hasThumbnail: boolean;
+  createdAt: string;      // ISO 8601
+}
+
+/** Full library entry response (GET by ID) - includes data */
+export interface LibraryEntryResponse {
+  id: string;
+  version: number;
+  type: string;
+  name: string;
+  description: string;
+  tags: string[];
+  appVersion: string;
+  data: Record<string, unknown>;
+  downloads: number;
+  flagCount: number;
+  thumbnailUrl: string | null;
+  createdAt: string;
+}
+
+/** Library entry summary for browse results - no data field */
+export interface LibraryEntrySummary {
+  id: string;
+  version: number;
+  type: string;
+  name: string;
+  description: string;
+  tags: string[];
+  appVersion: string;
+  downloads: number;
+  flagCount: number;
+  thumbnailUrl: string | null;
+  createdAt: string;
+}
+
+/** Library list response */
+export interface LibraryListResponse {
+  entries: LibraryEntrySummary[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+/** Library flag input */
+export interface LibraryFlagInput {
+  reason: 'inappropriate' | 'spam' | 'broken';
+}

@@ -8,7 +8,7 @@ import {
   DeleteCommand,
   ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
-import type { ShotRawRecord, ShotAggRecord, WsConnection, CityEntry } from './types.js';
+import type { ShotRawRecord, ShotAggRecord, WsConnection, CityEntry, LibraryEntryRecord } from './types.js';
 
 const client = new DynamoDBClient({});
 export const docClient = DynamoDBDocumentClient.from(client, {
@@ -20,6 +20,8 @@ const SHOTS_AGG_TABLE = process.env.SHOTS_AGG_TABLE || 'ShotsAgg';
 const CONNECTIONS_TABLE = process.env.CONNECTIONS_TABLE || 'WsConnections';
 const CITIES_TABLE = process.env.CITIES_TABLE || 'Cities';
 const IDEMPOTENCY_TABLE = process.env.IDEMPOTENCY_TABLE || 'Idempotency';
+const RATE_LIMIT_TABLE = process.env.RATE_LIMIT_TABLE || 'RateLimit';
+const LIBRARY_TABLE = process.env.LIBRARY_TABLE || 'Library';
 
 /** TTL for raw events: 180 days */
 const RAW_TTL_DAYS = parseInt(process.env.RAW_TTL_DAYS || '180', 10);
@@ -265,4 +267,199 @@ export async function setIdempotencyKey(key: string, eventId: string): Promise<v
       ttl,
     },
   }));
+}
+
+// ============ Rate Limiting ============
+
+/** Rate limit window: 1 hour in seconds */
+const RATE_LIMIT_WINDOW_SECONDS = 3600;
+
+/** Max requests per IP per hour */
+const RATE_LIMIT_MAX_REQUESTS = 10;
+
+/**
+ * Check and increment rate limit for an IP address.
+ * Returns true if the request is allowed, false if rate limited.
+ */
+export async function checkRateLimit(ip: string): Promise<{ allowed: boolean; remaining: number }> {
+  const pk = `RATELIMIT#${ip}`;
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = now - (now % RATE_LIMIT_WINDOW_SECONDS);
+  const ttl = windowStart + RATE_LIMIT_WINDOW_SECONDS + 60; // Keep for 1 minute after window expires
+
+  try {
+    const response = await docClient.send(new UpdateCommand({
+      TableName: RATE_LIMIT_TABLE,
+      Key: { pk },
+      UpdateExpression: 'SET #count = if_not_exists(#count, :zero) + :one, window_start = if_not_exists(window_start, :windowStart), #ttl = :ttl',
+      ConditionExpression: 'attribute_not_exists(window_start) OR window_start = :windowStart',
+      ExpressionAttributeNames: { '#count': 'count', '#ttl': 'ttl' },
+      ExpressionAttributeValues: { ':zero': 0, ':one': 1, ':windowStart': windowStart, ':ttl': ttl },
+      ReturnValues: 'ALL_NEW',
+    }));
+
+    const count = (response.Attributes?.count as number) || 1;
+    const allowed = count <= RATE_LIMIT_MAX_REQUESTS;
+    return { allowed, remaining: Math.max(0, RATE_LIMIT_MAX_REQUESTS - count) };
+  } catch (error: unknown) {
+    // If condition failed, the window has changed - reset the counter
+    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') {
+      await docClient.send(new PutCommand({
+        TableName: RATE_LIMIT_TABLE,
+        Item: { pk, count: 1, window_start: windowStart, ttl },
+      }));
+      return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - 1 };
+    }
+    throw error;
+  }
+}
+
+/** Configurable rate limiter with custom key prefix and max requests */
+export async function checkRateLimitCustom(
+  key: string,
+  maxRequests: number
+): Promise<{ allowed: boolean; remaining: number }> {
+  const pk = `RATELIMIT#${key}`;
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = now - (now % RATE_LIMIT_WINDOW_SECONDS);
+  const ttl = windowStart + RATE_LIMIT_WINDOW_SECONDS + 60;
+
+  try {
+    const response = await docClient.send(new UpdateCommand({
+      TableName: RATE_LIMIT_TABLE,
+      Key: { pk },
+      UpdateExpression: 'SET #count = if_not_exists(#count, :zero) + :one, window_start = if_not_exists(window_start, :windowStart), #ttl = :ttl',
+      ConditionExpression: 'attribute_not_exists(window_start) OR window_start = :windowStart',
+      ExpressionAttributeNames: { '#count': 'count', '#ttl': 'ttl' },
+      ExpressionAttributeValues: { ':zero': 0, ':one': 1, ':windowStart': windowStart, ':ttl': ttl },
+      ReturnValues: 'ALL_NEW',
+    }));
+
+    const count = (response.Attributes?.count as number) || 1;
+    const allowed = count <= maxRequests;
+    return { allowed, remaining: Math.max(0, maxRequests - count) };
+  } catch (error: unknown) {
+    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') {
+      await docClient.send(new PutCommand({
+        TableName: RATE_LIMIT_TABLE,
+        Item: { pk, count: 1, window_start: windowStart, ttl },
+      }));
+      return { allowed: true, remaining: maxRequests - 1 };
+    }
+    throw error;
+  }
+}
+
+// ============ Library ============
+
+export async function putLibraryEntry(record: LibraryEntryRecord): Promise<void> {
+  await docClient.send(new PutCommand({
+    TableName: LIBRARY_TABLE,
+    Item: record,
+  }));
+}
+
+export async function getLibraryEntry(id: string): Promise<LibraryEntryRecord | null> {
+  const response = await docClient.send(new GetCommand({
+    TableName: LIBRARY_TABLE,
+    Key: { id },
+  }));
+  return (response.Item as LibraryEntryRecord | undefined) || null;
+}
+
+export async function deleteLibraryEntry(id: string, deviceId: string): Promise<boolean> {
+  try {
+    await docClient.send(new DeleteCommand({
+      TableName: LIBRARY_TABLE,
+      Key: { id },
+      ConditionExpression: 'deviceId = :deviceId',
+      ExpressionAttributeValues: { ':deviceId': deviceId },
+    }));
+    return true;
+  } catch (error: unknown) {
+    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+export async function incrementLibraryDownloads(id: string): Promise<number> {
+  const response = await docClient.send(new UpdateCommand({
+    TableName: LIBRARY_TABLE,
+    Key: { id },
+    UpdateExpression: 'SET downloads = if_not_exists(downloads, :zero) + :one',
+    ConditionExpression: 'attribute_exists(id)',
+    ExpressionAttributeValues: { ':zero': 0, ':one': 1 },
+    ReturnValues: 'ALL_NEW',
+  }));
+  return (response.Attributes?.downloads as number) || 1;
+}
+
+export async function incrementLibraryFlags(id: string): Promise<void> {
+  await docClient.send(new UpdateCommand({
+    TableName: LIBRARY_TABLE,
+    Key: { id },
+    UpdateExpression: 'SET flagCount = if_not_exists(flagCount, :zero) + :one',
+    ExpressionAttributeValues: { ':zero': 0, ':one': 1 },
+  }));
+}
+
+export async function setLibraryThumbnail(id: string, deviceId: string): Promise<boolean> {
+  try {
+    await docClient.send(new UpdateCommand({
+      TableName: LIBRARY_TABLE,
+      Key: { id },
+      UpdateExpression: 'SET hasThumbnail = :true',
+      ConditionExpression: 'deviceId = :deviceId',
+      ExpressionAttributeValues: { ':true': true, ':deviceId': deviceId },
+    }));
+    return true;
+  } catch (error: unknown) {
+    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+export async function queryLibraryByType(type: string): Promise<LibraryEntryRecord[]> {
+  const response = await docClient.send(new QueryCommand({
+    TableName: LIBRARY_TABLE,
+    IndexName: 'GSI1',
+    KeyConditionExpression: '#type = :type',
+    ExpressionAttributeNames: { '#type': 'type' },
+    ExpressionAttributeValues: { ':type': type },
+    ScanIndexForward: false,
+  }));
+  return (response.Items || []) as LibraryEntryRecord[];
+}
+
+export async function queryLibraryByDevice(deviceId: string): Promise<LibraryEntryRecord[]> {
+  const response = await docClient.send(new QueryCommand({
+    TableName: LIBRARY_TABLE,
+    IndexName: 'GSI2',
+    KeyConditionExpression: 'deviceId = :deviceId',
+    ExpressionAttributeValues: { ':deviceId': deviceId },
+    ScanIndexForward: false,
+  }));
+  return (response.Items || []) as LibraryEntryRecord[];
+}
+
+export async function scanLibraryEntries(): Promise<LibraryEntryRecord[]> {
+  const items: LibraryEntryRecord[] = [];
+  let lastKey: Record<string, unknown> | undefined;
+
+  do {
+    const response = await docClient.send(new ScanCommand({
+      TableName: LIBRARY_TABLE,
+      ExclusiveStartKey: lastKey,
+    }));
+    if (response.Items) {
+      items.push(...(response.Items as LibraryEntryRecord[]));
+    }
+    lastKey = response.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (lastKey);
+
+  return items;
 }

@@ -64,7 +64,10 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
           aws_dynamodb_table.shots_agg.arn,
           aws_dynamodb_table.ws_connections.arn,
           aws_dynamodb_table.cities.arn,
-          aws_dynamodb_table.idempotency.arn
+          aws_dynamodb_table.idempotency.arn,
+          aws_dynamodb_table.rate_limit.arn,
+          aws_dynamodb_table.library.arn,
+          "${aws_dynamodb_table.library.arn}/index/*"
         ]
       }
     ]
@@ -102,9 +105,13 @@ resource "aws_iam_role_policy" "lambda_s3" {
         Effect = "Allow"
         Action = [
           "s3:PutObject",
-          "s3:PutObjectAcl"
+          "s3:PutObjectAcl",
+          "s3:DeleteObject"
         ]
-        Resource = "${aws_s3_bucket.website.arn}/api/*"
+        Resource = [
+          "${aws_s3_bucket.website.arn}/api/*",
+          "${aws_s3_bucket.website.arn}/library/*"
+        ]
       }
     ]
   })

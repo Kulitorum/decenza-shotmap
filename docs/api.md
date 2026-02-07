@@ -171,6 +171,307 @@ Get recent shot events.
 curl "https://api.decenza.coffee/v1/shots/recent?limit=50"
 ```
 
+### POST /v1/crash-report
+
+Submit a crash report from the Decenza DE1 app. Creates a GitHub issue in the [Kulitorum/Decenza](https://github.com/Kulitorum/Decenza) repository.
+
+**Request Body:**
+```json
+{
+  "version": "1.1.37",
+  "platform": "android",
+  "device": "Decent Tablet",
+  "crash_log": "=== CRASH REPORT ===\nSignal: 11 (SIGSEGV)...",
+  "user_notes": "I was steaming milk when it crashed",
+  "debug_log_tail": "last 50 lines of debug.log..."
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| version | string | Yes | App version (max 50 chars) |
+| platform | string | Yes | One of: `android`, `ios`, `windows`, `macos`, `linux` |
+| device | string | No | Device info (max 100 chars) |
+| crash_log | string | Yes | Crash log content (max 50,000 chars) |
+| user_notes | string | No | User description of what happened (max 2,000 chars) |
+| debug_log_tail | string | No | Last lines of debug log (max 10,000 chars) |
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "issue_url": "https://github.com/Kulitorum/Decenza/issues/123"
+}
+```
+
+**Response (429 Too Many Requests):**
+```json
+{
+  "success": false,
+  "error": "Rate limit exceeded. Maximum 10 crash reports per hour."
+}
+```
+
+**Features:**
+- **Duplicate detection**: Searches for existing open issues with similar crash signatures. If found, adds a comment instead of creating a new issue.
+- **Rate limiting**: Maximum 10 reports per IP address per hour.
+- **Security**: User notes are sanitized to prevent markdown injection. File paths containing usernames are redacted.
+
+**Example (curl):**
+```bash
+curl -X POST https://api.decenza.coffee/v1/crash-report \
+  -H "Content-Type: application/json" \
+  -d '{
+    "version": "1.1.37",
+    "platform": "android",
+    "crash_log": "=== CRASH REPORT ===\nSignal: 11 (SIGSEGV)\nStack trace...",
+    "user_notes": "App crashed during startup"
+  }'
+```
+
+## Widget Library Endpoints
+
+### POST /v1/library/entries
+
+Upload a new library entry (widget, zone, layout, etc.).
+
+**Accepts both `multipart/form-data` and `application/json`.**
+
+**Option 1: Multipart (with optional inline thumbnail)**
+
+```
+Content-Type: multipart/form-data; boundary=----DecenzaBoundary...
+X-Device-Id: <device-uuid>
+```
+
+Parts:
+- `entry` (required): JSON string with the entry data
+- `thumbnail` (optional): PNG image (max 500KB, validated by magic bytes)
+
+**Option 2: Plain JSON**
+
+```
+Content-Type: application/json
+X-Device-Id: <device-uuid>
+```
+
+**Entry JSON (used in both cases):**
+```json
+{
+  "version": 1,
+  "type": "item",
+  "name": "Temperature Display",
+  "description": "Shows group head temp with color coding",
+  "tags": ["temperature", "%TEMP%", "%CONNECTED_COLOR%", "custom"],
+  "appVersion": "1.2.3",
+  "data": {
+    "item": {
+      "type": "custom",
+      "content": "<span style='color:%CONNECTED_COLOR%'>%TEMP%</span>\u00B0C",
+      "emoji": "qrc:/icons/temperature.svg",
+      "action": "",
+      "align": "center",
+      "backgroundColor": "#333333"
+    }
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| version | number | Yes | Entry format version (1-100) |
+| type | string | Yes | Entry type: `item`, `zone`, `layout`, or any string (max 50 chars) |
+| name | string | Yes | Display name (max 100 chars) |
+| description | string | No | Description (max 500 chars, default: "") |
+| tags | string[] | No | Searchable tags (max 20 tags, each max 50 chars) |
+| appVersion | string | Yes | App version that created this entry (max 50 chars) |
+| data | object | Yes | Opaque JSON data (max 100KB serialized) |
+
+**Response (201 Created):**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "type": "item",
+  "name": "Temperature Display",
+  "createdAt": "2026-02-07T12:00:00.000Z",
+  "thumbnailUrl": "https://decenza.coffee/library/thumbnails/550e8400-....png"
+}
+```
+
+Note: `thumbnailUrl` is only included if a thumbnail was uploaded (either inline via multipart or separately via PUT).
+
+**Rate limit:** 20 uploads per hour per device UUID.
+
+### GET /v1/library/entries
+
+Browse and search library entries. Returns metadata only (no `data` field).
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| type | string | (none) | Filter by entry type (exact match) |
+| search | string | (none) | Case-insensitive text search in name/description |
+| tags | string | (none) | Comma-separated tags (AND logic: all must match) |
+| sort | string | newest | Sort order: `newest`, `popular`, `name` |
+| page | number | 1 | Page number (1-based) |
+| per_page | number | 20 | Results per page (1-50) |
+| device_id | string | (none) | Filter by device UUID. Use `mine` to read from X-Device-Id header. |
+
+**Response (200 OK):**
+```json
+{
+  "entries": [
+    {
+      "id": "550e8400-...",
+      "version": 1,
+      "type": "item",
+      "name": "Temperature Display",
+      "description": "Shows group head temp with color coding",
+      "tags": ["temperature", "%TEMP%"],
+      "appVersion": "1.2.3",
+      "downloads": 42,
+      "flagCount": 0,
+      "thumbnailUrl": "https://decenza.coffee/library/thumbnails/550e8400-....png",
+      "createdAt": "2026-02-07T12:00:00.000Z"
+    }
+  ],
+  "total": 142,
+  "page": 1,
+  "per_page": 20
+}
+```
+
+Note: `thumbnailUrl` is `null` if no thumbnail has been uploaded. Response is cached for 10 seconds.
+
+**Examples:**
+```bash
+# Browse all items
+curl "https://api.decenza.coffee/v1/library/entries?type=item"
+
+# Search for temperature widgets
+curl "https://api.decenza.coffee/v1/library/entries?type=item&search=temperature"
+
+# Filter by tags (URL-encoded %TEMP% = %25TEMP%25)
+curl "https://api.decenza.coffee/v1/library/entries?tags=%25TEMP%25,%25WEIGHT%25"
+
+# Most popular layouts
+curl "https://api.decenza.coffee/v1/library/entries?type=layout&sort=popular"
+
+# My uploads
+curl -H "X-Device-Id: my-uuid" "https://api.decenza.coffee/v1/library/entries?device_id=mine"
+```
+
+### GET /v1/library/entries/{id}
+
+Get a single library entry with full data.
+
+**Response (200 OK):**
+```json
+{
+  "id": "550e8400-...",
+  "version": 1,
+  "type": "item",
+  "name": "Temperature Display",
+  "description": "Shows group head temp with color coding",
+  "tags": ["temperature", "%TEMP%"],
+  "appVersion": "1.2.3",
+  "data": { "item": { ... } },
+  "downloads": 42,
+  "flagCount": 0,
+  "thumbnailUrl": "https://decenza.coffee/library/thumbnails/550e8400-....png",
+  "createdAt": "2026-02-07T12:00:00.000Z"
+}
+```
+
+**Response (404 Not Found):**
+```json
+{ "error": "Entry not found" }
+```
+
+### POST /v1/library/entries/{id}/download
+
+Record a download (import) of a library entry. Call this when the user actually imports the entry, not on browse/preview.
+
+**Response (200 OK):**
+```json
+{ "success": true, "downloads": 43 }
+```
+
+**Response (404 Not Found):**
+```json
+{ "error": "Entry not found" }
+```
+
+### DELETE /v1/library/entries/{id}
+
+Delete your own library entry. Also removes the thumbnail from S3.
+
+**Request Headers:**
+```
+X-Device-Id: <device-uuid>
+```
+
+**Response (200 OK):**
+```json
+{ "success": true }
+```
+
+**Response (403 Forbidden):**
+```json
+{ "error": "Entry not found or you are not the owner" }
+```
+
+### POST /v1/library/entries/{id}/flag
+
+Report a library entry for moderation.
+
+**Request Body:**
+```json
+{ "reason": "inappropriate" }
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| reason | string | Yes | One of: `inappropriate`, `spam`, `broken` |
+
+**Response (200 OK):**
+```json
+{ "success": true }
+```
+
+**Rate limit:** 10 flags per hour per IP address.
+
+### PUT /v1/library/entries/{id}/thumbnail
+
+Upload a PNG thumbnail for a library entry.
+
+**Request Headers:**
+```
+Content-Type: image/png
+X-Device-Id: <device-uuid>
+```
+
+**Request Body:** Raw PNG binary data (max 500KB).
+
+**Response (200 OK):**
+```json
+{ "thumbnailUrl": "https://decenza.coffee/library/thumbnails/550e8400-....png" }
+```
+
+**Constraints:**
+- Must be PNG format (server validates magic bytes)
+- Maximum 500KB file size
+- X-Device-Id must match the entry's uploader
+- Calling PUT again replaces the existing thumbnail (CloudFront cache TTL: 1 hour)
+
+**Example (curl):**
+```bash
+curl -X PUT "https://api.decenza.coffee/v1/library/entries/550e8400-.../thumbnail" \
+  -H "Content-Type: image/png" \
+  -H "X-Device-Id: my-device-uuid" \
+  --data-binary @thumbnail.png
+```
+
 ## WebSocket API
 
 Connect to `wss://ws.decenza.coffee` for real-time shot events.
@@ -272,6 +573,9 @@ setInterval(() => {
 | POST /v1/shots | 100/second | Per API key (future) |
 | GET /v1/stats | 100/second | Cached for 30s |
 | GET /v1/shots/recent | 100/second | Cached for 5s |
+| POST /v1/crash-report | 10/hour | Per IP address |
+| POST /v1/library/entries | 20/hour | Per device UUID |
+| POST /v1/library/entries/{id}/flag | 10/hour | Per IP address |
 | WebSocket connections | 1000 concurrent | Per account |
 
 ## Error Handling
@@ -287,7 +591,11 @@ All endpoints return JSON with consistent error format:
 
 HTTP status codes:
 - `200` - Success
+- `201` - Created (new library entry)
 - `400` - Bad request (validation error)
+- `401` - Missing X-Device-Id header
+- `403` - Not the owner of this entry
+- `404` - Entry not found
 - `429` - Rate limit exceeded
 - `500` - Internal server error
 
@@ -297,8 +605,8 @@ The API supports CORS for browser requests:
 
 ```
 Access-Control-Allow-Origin: *
-Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type, x-api-key
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, x-api-key, X-Device-Id
 ```
 
 ## Integration Examples

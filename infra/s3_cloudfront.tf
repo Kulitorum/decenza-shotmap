@@ -130,6 +130,29 @@ resource "aws_cloudfront_distribution" "website" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 
+  # Cache behavior for library thumbnails (1-hour TTL)
+  ordered_cache_behavior {
+    path_pattern           = "library/thumbnails/*"
+    target_origin_id       = "S3Origin"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 3600
+    max_ttl     = 86400
+
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
   # Cache behavior for index.html (short TTL)
   ordered_cache_behavior {
     path_pattern           = "index.html"

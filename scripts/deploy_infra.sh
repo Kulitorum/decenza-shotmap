@@ -26,6 +26,15 @@ LAMBDAS=(
     "wsConnect"
     "wsDisconnect"
     "wsMessage"
+    "exportShots"
+    "crashReport"
+    "libraryCreate"
+    "libraryList"
+    "libraryGet"
+    "libraryDownload"
+    "libraryDelete"
+    "libraryFlag"
+    "libraryThumbnail"
 )
 
 for LAMBDA in "${LAMBDAS[@]}"; do

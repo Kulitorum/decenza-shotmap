@@ -41,7 +41,16 @@ try {
         "getRecentShots",
         "wsConnect",
         "wsDisconnect",
-        "wsMessage"
+        "wsMessage",
+        "exportShots",
+        "crashReport",
+        "libraryCreate",
+        "libraryList",
+        "libraryGet",
+        "libraryDownload",
+        "libraryDelete",
+        "libraryFlag",
+        "libraryThumbnail"
     )
 
     foreach ($Lambda in $Lambdas) {

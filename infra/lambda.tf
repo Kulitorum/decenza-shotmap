@@ -225,3 +225,239 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.export_shots_schedule.arn
 }
+
+# Crash Report Lambda
+resource "aws_lambda_function" "crash_report" {
+  function_name = "${local.project_name}-crash-report"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "crashReport.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 30
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/crashReport.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/crashReport.zip")
+
+  environment {
+    variables = {
+      RATE_LIMIT_TABLE = aws_dynamodb_table.rate_limit.name
+      CORS_ORIGIN      = var.cors_origin
+      GITHUB_PAT       = var.github_pat
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "crash_report" {
+  name              = "/aws/lambda/${aws_lambda_function.crash_report.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# ============ Library Lambdas ============
+
+# Library Create Lambda
+resource "aws_lambda_function" "library_create" {
+  function_name = "${local.project_name}-library-create"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "libraryCreate.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 10
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/libraryCreate.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/libraryCreate.zip")
+
+  environment {
+    variables = {
+      LIBRARY_TABLE        = aws_dynamodb_table.library.name
+      RATE_LIMIT_TABLE     = aws_dynamodb_table.rate_limit.name
+      CORS_ORIGIN          = var.cors_origin
+      WEBSITE_BUCKET       = aws_s3_bucket.website.id
+      THUMBNAIL_URL_PREFIX = "https://${var.domain_name}/library/thumbnails"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "library_create" {
+  name              = "/aws/lambda/${aws_lambda_function.library_create.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# Library List Lambda
+resource "aws_lambda_function" "library_list" {
+  function_name = "${local.project_name}-library-list"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "libraryList.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 10
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/libraryList.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/libraryList.zip")
+
+  environment {
+    variables = {
+      LIBRARY_TABLE        = aws_dynamodb_table.library.name
+      CORS_ORIGIN          = var.cors_origin
+      THUMBNAIL_URL_PREFIX = "https://${var.domain_name}/library/thumbnails"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "library_list" {
+  name              = "/aws/lambda/${aws_lambda_function.library_list.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# Library Get Lambda
+resource "aws_lambda_function" "library_get" {
+  function_name = "${local.project_name}-library-get"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "libraryGet.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 10
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/libraryGet.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/libraryGet.zip")
+
+  environment {
+    variables = {
+      LIBRARY_TABLE        = aws_dynamodb_table.library.name
+      CORS_ORIGIN          = var.cors_origin
+      THUMBNAIL_URL_PREFIX = "https://${var.domain_name}/library/thumbnails"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "library_get" {
+  name              = "/aws/lambda/${aws_lambda_function.library_get.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# Library Download Lambda
+resource "aws_lambda_function" "library_download" {
+  function_name = "${local.project_name}-library-download"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "libraryDownload.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 10
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/libraryDownload.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/libraryDownload.zip")
+
+  environment {
+    variables = {
+      LIBRARY_TABLE = aws_dynamodb_table.library.name
+      CORS_ORIGIN   = var.cors_origin
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "library_download" {
+  name              = "/aws/lambda/${aws_lambda_function.library_download.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# Library Delete Lambda
+resource "aws_lambda_function" "library_delete" {
+  function_name = "${local.project_name}-library-delete"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "libraryDelete.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 10
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/libraryDelete.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/libraryDelete.zip")
+
+  environment {
+    variables = {
+      LIBRARY_TABLE  = aws_dynamodb_table.library.name
+      WEBSITE_BUCKET = aws_s3_bucket.website.id
+      CORS_ORIGIN    = var.cors_origin
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "library_delete" {
+  name              = "/aws/lambda/${aws_lambda_function.library_delete.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# Library Flag Lambda
+resource "aws_lambda_function" "library_flag" {
+  function_name = "${local.project_name}-library-flag"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "libraryFlag.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 10
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/libraryFlag.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/libraryFlag.zip")
+
+  environment {
+    variables = {
+      LIBRARY_TABLE    = aws_dynamodb_table.library.name
+      RATE_LIMIT_TABLE = aws_dynamodb_table.rate_limit.name
+      CORS_ORIGIN      = var.cors_origin
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "library_flag" {
+  name              = "/aws/lambda/${aws_lambda_function.library_flag.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# Library Thumbnail Lambda
+resource "aws_lambda_function" "library_thumbnail" {
+  function_name = "${local.project_name}-library-thumbnail"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "libraryThumbnail.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 30
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/libraryThumbnail.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/libraryThumbnail.zip")
+
+  environment {
+    variables = {
+      LIBRARY_TABLE        = aws_dynamodb_table.library.name
+      WEBSITE_BUCKET       = aws_s3_bucket.website.id
+      THUMBNAIL_URL_PREFIX = "https://${var.domain_name}/library/thumbnails"
+      CORS_ORIGIN          = var.cors_origin
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "library_thumbnail" {
+  name              = "/aws/lambda/${aws_lambda_function.library_thumbnail.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}

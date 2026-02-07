@@ -49,3 +49,10 @@ variable "api_throttle_burst" {
   type        = number
   default     = 200
 }
+
+variable "github_pat" {
+  description = "GitHub Personal Access Token for crash report issue creation"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
