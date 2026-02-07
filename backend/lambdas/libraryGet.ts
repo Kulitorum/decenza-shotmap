@@ -43,6 +43,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       description: record.description,
       tags: Array.isArray(record.tags) ? record.tags : [],
       appVersion: record.appVersion,
+      deviceId: record.deviceId,
       data: JSON.parse(record.data),
       downloads: record.downloads || 0,
       flagCount: record.flagCount || 0,

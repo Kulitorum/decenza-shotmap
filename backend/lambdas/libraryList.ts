@@ -23,6 +23,7 @@ function toSummary(record: LibraryEntryRecord): LibraryEntrySummary {
     description: record.description,
     tags: Array.isArray(record.tags) ? record.tags : [],
     appVersion: record.appVersion,
+    deviceId: record.deviceId,
     downloads: record.downloads || 0,
     flagCount: record.flagCount || 0,
     thumbnailUrl: record.hasThumbnail ? `${THUMBNAIL_URL_PREFIX}/${record.id}.png` : null,

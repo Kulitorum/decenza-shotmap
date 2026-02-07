@@ -171,6 +171,7 @@ export interface LibraryEntryResponse {
   description: string;
   tags: string[];
   appVersion: string;
+  deviceId: string;
   data: Record<string, unknown>;
   downloads: number;
   flagCount: number;
@@ -187,6 +188,7 @@ export interface LibraryEntrySummary {
   description: string;
   tags: string[];
   appVersion: string;
+  deviceId: string;
   downloads: number;
   flagCount: number;
   thumbnailUrl: string | null;
