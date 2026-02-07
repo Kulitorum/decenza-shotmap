@@ -137,8 +137,6 @@ export interface RateLimitRecord {
 export interface LibraryEntryInput {
   version: number;
   type: string;
-  name: string;
-  description: string;
   tags: string[];
   appVersion: string;
   data: Record<string, unknown>;
@@ -149,8 +147,6 @@ export interface LibraryEntryRecord {
   id: string;
   version: number;
   type: string;
-  name: string;
-  description: string;
   tags: string[];
   appVersion: string;
   data: string;           // JSON-serialized
@@ -167,8 +163,6 @@ export interface LibraryEntryResponse {
   id: string;
   version: number;
   type: string;
-  name: string;
-  description: string;
   tags: string[];
   appVersion: string;
   deviceId: string;
@@ -184,8 +178,6 @@ export interface LibraryEntrySummary {
   id: string;
   version: number;
   type: string;
-  name: string;
-  description: string;
   tags: string[];
   appVersion: string;
   deviceId: string;

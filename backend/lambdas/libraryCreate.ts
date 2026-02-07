@@ -207,8 +207,6 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     id,
     version: input.version,
     type: input.type,
-    name: input.name,
-    description: input.description,
     tags: input.tags,
     appVersion: input.appVersion,
     data: dataStr,
@@ -241,7 +239,6 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   const response: Record<string, unknown> = {
     id,
     type: input.type,
-    name: input.name,
     createdAt: now,
   };
 

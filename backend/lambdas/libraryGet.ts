@@ -39,8 +39,6 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       id: record.id,
       version: record.version,
       type: record.type,
-      name: record.name,
-      description: record.description,
       tags: Array.isArray(record.tags) ? record.tags : [],
       appVersion: record.appVersion,
       deviceId: record.deviceId,

@@ -19,8 +19,6 @@ function toSummary(record: LibraryEntryRecord): LibraryEntrySummary {
     id: record.id,
     version: record.version,
     type: record.type,
-    name: record.name,
-    description: record.description,
     tags: Array.isArray(record.tags) ? record.tags : [],
     appVersion: record.appVersion,
     deviceId: record.deviceId,
@@ -39,7 +37,6 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   try {
     const params = event.queryStringParameters || {};
     const type = params.type;
-    const search = params.search?.toLowerCase();
     const tagsParam = params.tags;
     const requestedTags = tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(Boolean) : [];
     const sort = params.sort || 'newest';
@@ -70,14 +67,6 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       records = await scanLibraryEntries();
     }
 
-    // Search filter
-    if (search) {
-      records = records.filter(r =>
-        r.name.toLowerCase().includes(search) ||
-        r.description.toLowerCase().includes(search)
-      );
-    }
-
     // Tag filter (all specified tags must be present)
     if (requestedTags.length > 0) {
       records = records.filter(r => {
@@ -90,9 +79,6 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     switch (sort) {
       case 'popular':
         records.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
-        break;
-      case 'name':
-        records.sort((a, b) => a.name.localeCompare(b.name));
         break;
       case 'newest':
       default:

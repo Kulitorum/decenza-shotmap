@@ -140,8 +140,6 @@ export function validateCrashReportInput(data: unknown): {
 
 // ============ Library ============
 
-const MAX_LIBRARY_NAME = 100;
-const MAX_LIBRARY_DESCRIPTION = 500;
 const MAX_LIBRARY_TYPE = 50;
 const MAX_LIBRARY_TAG = 50;
 const MAX_LIBRARY_TAGS = 20;
@@ -155,14 +153,6 @@ export const libraryEntryInputSchema = z.object({
     .min(1, 'type is required')
     .max(MAX_LIBRARY_TYPE)
     .transform(normalizeString),
-  name: z.string()
-    .min(1, 'name is required')
-    .max(MAX_LIBRARY_NAME)
-    .transform(normalizeString),
-  description: z.string()
-    .max(MAX_LIBRARY_DESCRIPTION)
-    .transform(normalizeString)
-    .default(''),
   tags: z.array(
     z.string().max(MAX_LIBRARY_TAG).transform(normalizeString)
   ).max(MAX_LIBRARY_TAGS).default([]),
