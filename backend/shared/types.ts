@@ -154,6 +154,7 @@ export interface LibraryEntryRecord {
   tags: string[];
   appVersion: string;
   data: string;           // JSON-serialized
+  dataHash: string;       // SHA-256 of data for duplicate detection
   deviceId: string;
   downloads: number;
   flagCount: number;

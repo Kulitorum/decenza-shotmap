@@ -423,6 +423,17 @@ export async function setLibraryThumbnail(id: string, deviceId: string): Promise
   }
 }
 
+export async function queryLibraryByDataHash(dataHash: string): Promise<LibraryEntryRecord[]> {
+  const response = await docClient.send(new QueryCommand({
+    TableName: LIBRARY_TABLE,
+    IndexName: 'GSI3',
+    KeyConditionExpression: 'dataHash = :dataHash',
+    ExpressionAttributeValues: { ':dataHash': dataHash },
+    Limit: 1,
+  }));
+  return (response.Items || []) as LibraryEntryRecord[];
+}
+
 export async function queryLibraryByType(type: string): Promise<LibraryEntryRecord[]> {
   const response = await docClient.send(new QueryCommand({
     TableName: LIBRARY_TABLE,

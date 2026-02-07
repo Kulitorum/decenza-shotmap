@@ -1,8 +1,8 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { validateLibraryEntryInput } from '../shared/validate.js';
-import { putLibraryEntry, checkRateLimitCustom } from '../shared/dynamo.js';
+import { putLibraryEntry, checkRateLimitCustom, queryLibraryByDataHash } from '../shared/dynamo.js';
 import type { LibraryEntryRecord } from '../shared/types.js';
 
 const CORS_HEADERS = {
@@ -186,6 +186,19 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   }
 
   const input = validation.data;
+  const dataStr = JSON.stringify(input.data);
+  const dataHash = createHash('sha256').update(dataStr).digest('hex');
+
+  // Check for duplicate data
+  const duplicates = await queryLibraryByDataHash(dataHash);
+  if (duplicates.length > 0) {
+    return {
+      statusCode: 409,
+      headers: CORS_HEADERS,
+      body: JSON.stringify({ error: 'An entry with identical data already exists', existingId: duplicates[0].id }),
+    };
+  }
+
   const id = randomUUID();
   const now = new Date().toISOString();
   const hasThumbnail = thumbnailBuffer !== null;
@@ -198,7 +211,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     description: input.description,
     tags: input.tags,
     appVersion: input.appVersion,
-    data: JSON.stringify(input.data),
+    data: dataStr,
+    dataHash,
     deviceId,
     downloads: 0,
     flagCount: 0,

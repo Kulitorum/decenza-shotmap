@@ -148,6 +148,11 @@ resource "aws_dynamodb_table" "library" {
     type = "S"
   }
 
+  attribute {
+    name = "dataHash"
+    type = "S"
+  }
+
   global_secondary_index {
     name            = "GSI1"
     hash_key        = "type"
@@ -160,6 +165,12 @@ resource "aws_dynamodb_table" "library" {
     hash_key        = "deviceId"
     range_key       = "createdAt"
     projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "GSI3"
+    hash_key        = "dataHash"
+    projection_type = "KEYS_ONLY"
   }
 
   tags = local.common_tags
