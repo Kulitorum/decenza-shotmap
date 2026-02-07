@@ -39,6 +39,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     const type = params.type;
     const tagsParam = params.tags;
     const requestedTags = tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(Boolean) : [];
+    const since = params.since;
     const sort = params.sort || 'newest';
     const page = Math.max(parseInt(params.page || '1', 10) || 1, 1);
     const perPage = Math.min(Math.max(parseInt(params.per_page || String(DEFAULT_PER_PAGE), 10) || DEFAULT_PER_PAGE, 1), MAX_PER_PAGE);
@@ -65,6 +66,11 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       records = await queryLibraryByType(type);
     } else {
       records = await scanLibraryEntries();
+    }
+
+    // Since filter
+    if (since) {
+      records = records.filter(r => r.createdAt > since);
     }
 
     // Tag filter (all specified tags must be present)
