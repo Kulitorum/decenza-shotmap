@@ -405,24 +405,6 @@ export async function incrementLibraryFlags(id: string): Promise<void> {
   }));
 }
 
-export async function setLibraryThumbnail(id: string, deviceId: string): Promise<boolean> {
-  try {
-    await docClient.send(new UpdateCommand({
-      TableName: LIBRARY_TABLE,
-      Key: { id },
-      UpdateExpression: 'SET hasThumbnail = :true',
-      ConditionExpression: 'deviceId = :deviceId',
-      ExpressionAttributeValues: { ':true': true, ':deviceId': deviceId },
-    }));
-    return true;
-  } catch (error: unknown) {
-    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') {
-      return false;
-    }
-    throw error;
-  }
-}
-
 export async function queryLibraryByDataHash(dataHash: string): Promise<LibraryEntryRecord[]> {
   const response = await docClient.send(new QueryCommand({
     TableName: LIBRARY_TABLE,

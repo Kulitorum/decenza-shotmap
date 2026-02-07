@@ -154,7 +154,8 @@ export interface LibraryEntryRecord {
   deviceId: string;
   downloads: number;
   flagCount: number;
-  hasThumbnail: boolean;
+  hasThumbnailFull: boolean;
+  hasThumbnailCompact: boolean;
   createdAt: string;      // ISO 8601
 }
 
@@ -169,7 +170,8 @@ export interface LibraryEntryResponse {
   data: Record<string, unknown>;
   downloads: number;
   flagCount: number;
-  thumbnailUrl: string | null;
+  thumbnailFullUrl: string | null;
+  thumbnailCompactUrl: string | null;
   createdAt: string;
 }
 
@@ -183,7 +185,8 @@ export interface LibraryEntrySummary {
   deviceId: string;
   downloads: number;
   flagCount: number;
-  thumbnailUrl: string | null;
+  thumbnailFullUrl: string | null;
+  thumbnailCompactUrl: string | null;
   createdAt: string;
 }
 

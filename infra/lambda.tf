@@ -431,33 +431,3 @@ resource "aws_cloudwatch_log_group" "library_flag" {
   retention_in_days = 14
   tags              = local.common_tags
 }
-
-# Library Thumbnail Lambda
-resource "aws_lambda_function" "library_thumbnail" {
-  function_name = "${local.project_name}-library-thumbnail"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "libraryThumbnail.handler"
-  runtime       = "nodejs20.x"
-  timeout       = 30
-  memory_size   = 256
-
-  filename         = "${path.module}/../backend/dist/libraryThumbnail.zip"
-  source_code_hash = filebase64sha256("${path.module}/../backend/dist/libraryThumbnail.zip")
-
-  environment {
-    variables = {
-      LIBRARY_TABLE        = aws_dynamodb_table.library.name
-      WEBSITE_BUCKET       = aws_s3_bucket.website.id
-      THUMBNAIL_URL_PREFIX = "https://${var.domain_name}/library/thumbnails"
-      CORS_ORIGIN          = var.cors_origin
-    }
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_cloudwatch_log_group" "library_thumbnail" {
-  name              = "/aws/lambda/${aws_lambda_function.library_thumbnail.function_name}"
-  retention_in_days = 14
-  tags              = local.common_tags
-}

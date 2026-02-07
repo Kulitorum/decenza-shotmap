@@ -21,7 +21,8 @@ const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 interface MultipartParts {
   entry?: string;
-  thumbnail?: Buffer;
+  thumbnail_full?: Buffer;
+  thumbnail_compact?: Buffer;
 }
 
 /** Parse multipart/form-data body into named parts */
@@ -71,8 +72,10 @@ function parseMultipart(body: Buffer, boundary: string): MultipartParts {
 
     if (name === 'entry') {
       result.entry = partBody.toString('utf-8');
-    } else if (name === 'thumbnail') {
-      result.thumbnail = Buffer.from(partBody);
+    } else if (name === 'thumbnail_full') {
+      result.thumbnail_full = Buffer.from(partBody);
+    } else if (name === 'thumbnail_compact') {
+      result.thumbnail_compact = Buffer.from(partBody);
     }
   }
 
@@ -104,7 +107,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
 
   const contentType = event.headers['content-type'] || '';
   let entryJson: unknown;
-  let thumbnailBuffer: Buffer | null = null;
+  let thumbnailFullBuffer: Buffer | null = null;
+  let thumbnailCompactBuffer: Buffer | null = null;
 
   if (contentType.includes('multipart/form-data')) {
     // Parse multipart body
@@ -142,8 +146,11 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       };
     }
 
-    if (parts.thumbnail) {
-      thumbnailBuffer = parts.thumbnail;
+    if (parts.thumbnail_full) {
+      thumbnailFullBuffer = parts.thumbnail_full;
+    }
+    if (parts.thumbnail_compact) {
+      thumbnailCompactBuffer = parts.thumbnail_compact;
     }
   } else {
     // Plain JSON body
@@ -167,21 +174,23 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     };
   }
 
-  // Validate thumbnail if present
-  if (thumbnailBuffer) {
-    if (thumbnailBuffer.length > MAX_THUMBNAIL_SIZE) {
-      return {
-        statusCode: 400,
-        headers: CORS_HEADERS,
-        body: JSON.stringify({ error: `Thumbnail must be at most ${MAX_THUMBNAIL_SIZE / 1024}KB` }),
-      };
-    }
-    if (thumbnailBuffer.length < 8 || !thumbnailBuffer.subarray(0, 8).equals(PNG_MAGIC)) {
-      return {
-        statusCode: 400,
-        headers: CORS_HEADERS,
-        body: JSON.stringify({ error: 'Thumbnail must be a PNG image' }),
-      };
+  // Validate thumbnails if present
+  for (const [label, buf] of [['thumbnail_full', thumbnailFullBuffer], ['thumbnail_compact', thumbnailCompactBuffer]] as const) {
+    if (buf) {
+      if (buf.length > MAX_THUMBNAIL_SIZE) {
+        return {
+          statusCode: 400,
+          headers: CORS_HEADERS,
+          body: JSON.stringify({ error: `${label} must be at most ${MAX_THUMBNAIL_SIZE / 1024}KB` }),
+        };
+      }
+      if (buf.length < 8 || !buf.subarray(0, 8).equals(PNG_MAGIC)) {
+        return {
+          statusCode: 400,
+          headers: CORS_HEADERS,
+          body: JSON.stringify({ error: `${label} must be a PNG image` }),
+        };
+      }
     }
   }
 
@@ -201,7 +210,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
 
   const id = randomUUID();
   const now = new Date().toISOString();
-  const hasThumbnail = thumbnailBuffer !== null;
+  const hasThumbnailFull = thumbnailFullBuffer !== null;
+  const hasThumbnailCompact = thumbnailCompactBuffer !== null;
 
   const record: LibraryEntryRecord = {
     id,
@@ -214,25 +224,38 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     deviceId,
     downloads: 0,
     flagCount: 0,
-    hasThumbnail,
+    hasThumbnailFull,
+    hasThumbnailCompact,
     createdAt: now,
   };
 
   await putLibraryEntry(record);
 
-  // Upload thumbnail to S3 if present
-  if (thumbnailBuffer && WEBSITE_BUCKET) {
+  // Upload thumbnails to S3 if present
+  const uploads: Promise<unknown>[] = [];
+  if (thumbnailFullBuffer && WEBSITE_BUCKET) {
+    uploads.push(s3.send(new PutObjectCommand({
+      Bucket: WEBSITE_BUCKET,
+      Key: `library/thumbnails/${id}_full.png`,
+      Body: thumbnailFullBuffer,
+      ContentType: 'image/png',
+      CacheControl: 'public, max-age=3600',
+    })));
+  }
+  if (thumbnailCompactBuffer && WEBSITE_BUCKET) {
+    uploads.push(s3.send(new PutObjectCommand({
+      Bucket: WEBSITE_BUCKET,
+      Key: `library/thumbnails/${id}_compact.png`,
+      Body: thumbnailCompactBuffer,
+      ContentType: 'image/png',
+      CacheControl: 'public, max-age=3600',
+    })));
+  }
+  if (uploads.length > 0) {
     try {
-      await s3.send(new PutObjectCommand({
-        Bucket: WEBSITE_BUCKET,
-        Key: `library/thumbnails/${id}.png`,
-        Body: thumbnailBuffer,
-        ContentType: 'image/png',
-        CacheControl: 'public, max-age=3600',
-      }));
+      await Promise.all(uploads);
     } catch (err) {
-      console.error('Failed to upload thumbnail to S3:', err);
-      // Entry was created successfully, just log the thumbnail failure
+      console.error('Failed to upload thumbnails to S3:', err);
     }
   }
 
@@ -240,11 +263,9 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     id,
     type: input.type,
     createdAt: now,
+    thumbnailFullUrl: hasThumbnailFull ? `${THUMBNAIL_URL_PREFIX}/${id}_full.png` : null,
+    thumbnailCompactUrl: hasThumbnailCompact ? `${THUMBNAIL_URL_PREFIX}/${id}_compact.png` : null,
   };
-
-  if (hasThumbnail) {
-    response.thumbnailUrl = `${THUMBNAIL_URL_PREFIX}/${id}.png`;
-  }
 
   return {
     statusCode: 201,

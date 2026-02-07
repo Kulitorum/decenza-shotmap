@@ -34,7 +34,6 @@ LAMBDAS=(
     "libraryDownload"
     "libraryDelete"
     "libraryFlag"
-    "libraryThumbnail"
 )
 
 for LAMBDA in "${LAMBDAS[@]}"; do

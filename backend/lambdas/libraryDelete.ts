@@ -45,12 +45,12 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       };
     }
 
-    // Fire-and-forget: delete thumbnail from S3
+    // Fire-and-forget: delete thumbnails from S3
     if (WEBSITE_BUCKET) {
-      s3.send(new DeleteObjectCommand({
-        Bucket: WEBSITE_BUCKET,
-        Key: `library/thumbnails/${id}.png`,
-      })).catch(err => console.error('Failed to delete thumbnail from S3:', err));
+      Promise.all([
+        s3.send(new DeleteObjectCommand({ Bucket: WEBSITE_BUCKET, Key: `library/thumbnails/${id}_full.png` })),
+        s3.send(new DeleteObjectCommand({ Bucket: WEBSITE_BUCKET, Key: `library/thumbnails/${id}_compact.png` })),
+      ]).catch(err => console.error('Failed to delete thumbnails from S3:', err));
     }
 
     return {
