@@ -137,6 +137,29 @@ resource "aws_lambda_permission" "crash_report" {
   source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
 }
 
+# POST /v1/ai-report
+resource "aws_apigatewayv2_integration" "ai_report" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.ai_report.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "post_ai_report" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "POST /v1/ai-report"
+  target             = "integrations/${aws_apigatewayv2_integration.ai_report.id}"
+  authorization_type = "NONE"
+}
+
+resource "aws_lambda_permission" "ai_report" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ai_report.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
 # POST /v1/library/entries
 resource "aws_apigatewayv2_integration" "library_create" {
   api_id                 = aws_apigatewayv2_api.http.id

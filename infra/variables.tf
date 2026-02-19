@@ -51,7 +51,7 @@ variable "api_throttle_burst" {
 }
 
 variable "github_pat" {
-  description = "GitHub Personal Access Token for crash report issue creation"
+  description = "GitHub Personal Access Token for automated issue creation"
   type        = string
   sensitive   = true
   default     = ""

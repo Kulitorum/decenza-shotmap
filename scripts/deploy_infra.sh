@@ -28,6 +28,7 @@ LAMBDAS=(
     "wsMessage"
     "exportShots"
     "crashReport"
+    "aiReport"
     "libraryCreate"
     "libraryList"
     "libraryGet"

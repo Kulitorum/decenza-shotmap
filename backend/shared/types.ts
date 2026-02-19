@@ -123,6 +123,27 @@ export interface CrashReportResponse {
   error?: string;
 }
 
+/** AI report input from DE1 app */
+export interface AiReportInput {
+  version: string;
+  platform: 'android' | 'ios' | 'windows' | 'macos' | 'linux';
+  device?: string;
+  provider_name: string;
+  model_name: string;
+  context_label?: string;
+  system_prompt: string;
+  conversation_transcript: string;
+  shot_debug_log?: string;
+  user_notes: string;
+}
+
+/** AI report response */
+export interface AiReportResponse {
+  success: boolean;
+  issue_url?: string;
+  error?: string;
+}
+
 /** Rate limit record in DynamoDB */
 export interface RateLimitRecord {
   pk: string;  // RATELIMIT#<ip>

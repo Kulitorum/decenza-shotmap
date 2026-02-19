@@ -255,6 +255,35 @@ resource "aws_cloudwatch_log_group" "crash_report" {
   tags              = local.common_tags
 }
 
+# AI Report Lambda
+resource "aws_lambda_function" "ai_report" {
+  function_name = "${local.project_name}-ai-report"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "aiReport.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 60
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/aiReport.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/aiReport.zip")
+
+  environment {
+    variables = {
+      RATE_LIMIT_TABLE = aws_dynamodb_table.rate_limit.name
+      CORS_ORIGIN      = var.cors_origin
+      GITHUB_PAT       = var.github_pat
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "ai_report" {
+  name              = "/aws/lambda/${aws_lambda_function.ai_report.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
 # ============ Library Lambdas ============
 
 # Library Create Lambda

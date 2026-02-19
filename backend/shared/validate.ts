@@ -138,6 +138,71 @@ export function validateCrashReportInput(data: unknown): {
   return { success: false, error: errors.join('; ') };
 }
 
+// ============ AI Report ============
+
+const MAX_PROVIDER_NAME = 100;
+const MAX_MODEL_NAME = 100;
+const MAX_CONTEXT_LABEL = 200;
+const MAX_SYSTEM_PROMPT = 100000;
+const MAX_CONVERSATION_TRANSCRIPT = 200000;
+const MAX_SHOT_DEBUG_LOG = 100000;
+const MAX_AI_USER_NOTES = 2000;
+
+/** AI report input schema */
+export const aiReportInputSchema = z.object({
+  version: z.string()
+    .min(1, 'version is required')
+    .max(MAX_VERSION_CR, `version must be at most ${MAX_VERSION_CR} characters`)
+    .transform(normalizeString),
+  platform: z.enum(['android', 'ios', 'windows', 'macos', 'linux']),
+  device: z.string()
+    .max(MAX_DEVICE, `device must be at most ${MAX_DEVICE} characters`)
+    .transform(normalizeString)
+    .optional(),
+  provider_name: z.string()
+    .min(1, 'provider_name is required')
+    .max(MAX_PROVIDER_NAME, `provider_name must be at most ${MAX_PROVIDER_NAME} characters`)
+    .transform(normalizeString),
+  model_name: z.string()
+    .min(1, 'model_name is required')
+    .max(MAX_MODEL_NAME, `model_name must be at most ${MAX_MODEL_NAME} characters`)
+    .transform(normalizeString),
+  context_label: z.string()
+    .max(MAX_CONTEXT_LABEL, `context_label must be at most ${MAX_CONTEXT_LABEL} characters`)
+    .transform(normalizeString)
+    .optional(),
+  system_prompt: z.string()
+    .min(1, 'system_prompt is required')
+    .max(MAX_SYSTEM_PROMPT, `system_prompt must be at most ${MAX_SYSTEM_PROMPT} characters`),
+  conversation_transcript: z.string()
+    .min(1, 'conversation_transcript is required')
+    .max(MAX_CONVERSATION_TRANSCRIPT, `conversation_transcript must be at most ${MAX_CONVERSATION_TRANSCRIPT} characters`),
+  shot_debug_log: z.string()
+    .max(MAX_SHOT_DEBUG_LOG, `shot_debug_log must be at most ${MAX_SHOT_DEBUG_LOG} characters`)
+    .optional(),
+  user_notes: z.string()
+    .min(1, 'user_notes is required')
+    .max(MAX_AI_USER_NOTES, `user_notes must be at most ${MAX_AI_USER_NOTES} characters`),
+});
+
+export type ValidatedAiReportInput = z.infer<typeof aiReportInputSchema>;
+
+/** Validate AI report input */
+export function validateAiReportInput(data: unknown): {
+  success: true;
+  data: ValidatedAiReportInput;
+} | {
+  success: false;
+  error: string;
+} {
+  const result = aiReportInputSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  const errors = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`);
+  return { success: false, error: errors.join('; ') };
+}
+
 // ============ Library ============
 
 const MAX_LIBRARY_TYPE = 50;
