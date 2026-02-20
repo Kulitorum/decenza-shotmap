@@ -25,7 +25,7 @@ function respond(statusCode: number, body: AiReportResponse): APIGatewayProxyRes
 /**
  * Sanitize user-provided text to prevent markdown injection
  */
-function sanitizeText(text: string): string {
+function sanitizeText(text: string, escapeHtml = true): string {
   let sanitized = text
     .replace(/\/Users\/[^\/\s]+/g, '/Users/[redacted]')
     .replace(/\/home\/[^\/\s]+/g, '/home/[redacted]')
@@ -37,11 +37,12 @@ function sanitizeText(text: string): string {
     .replace(/\[([^\]]*)\]\(([^)]*)\)/g, '\\[$1\\]\\($2\\)')
     .replace(/!\[([^\]]*)\]\(([^)]*)\)/g, '!\\[$1\\]\\($2\\)');
 
-  // Escape backtick fences so user text can't break out of code blocks
-  sanitized = sanitized.replace(/^(`{3,})/gm, '\\$1');
-
-  // Escape HTML tags to prevent injection outside code fences (e.g. <img>, <details>)
-  sanitized = sanitized.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Escape HTML tags to prevent injection in GitHub issue body fields rendered outside code
+  // fences (e.g. <img>, <details>). Pass escapeHtml=false for Gist file content, issue titles,
+  // and any content inside code fences — those contexts don't interpret HTML tags.
+  if (escapeHtml) {
+    sanitized = sanitized.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
 
   return sanitized;
 }
@@ -82,13 +83,13 @@ async function createGist(
   const files: Record<string, { content: string }> = {
     'system_prompt.md': {
       content: truncateBytesHead(
-        `# System Prompt\n\n**Provider:** ${sanitizeText(providerName)}\n**Model:** ${sanitizeText(modelName)}\n\n---\n\n${sanitizeText(systemPrompt)}`,
+        `# System Prompt\n\n**Provider:** ${sanitizeText(providerName, false)}\n**Model:** ${sanitizeText(modelName, false)}\n\n---\n\n${sanitizeText(systemPrompt, false)}`,
         MAX_GIST_FILE_BYTES
       ),
     },
     'conversation.md': {
       content: truncateBytesTail(
-        `# Conversation Transcript\n\n${sanitizeText(conversationTranscript)}`,
+        `# Conversation Transcript\n\n${sanitizeText(conversationTranscript, false)}`,
         MAX_GIST_FILE_BYTES
       ),
     },
@@ -96,7 +97,7 @@ async function createGist(
 
   if (shotDebugLog) {
     files['debug_log.txt'] = {
-      content: truncateBytesHead(sanitizeText(shotDebugLog), MAX_GIST_FILE_BYTES),
+      content: truncateBytesHead(sanitizeText(shotDebugLog, false), MAX_GIST_FILE_BYTES),
     };
   }
 
@@ -112,7 +113,7 @@ async function createGist(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        description: `AI Report: ${sanitizeText(providerName)} / ${sanitizeText(modelName)}`,
+        description: `AI Report: ${sanitizeText(providerName, false)} / ${sanitizeText(modelName, false)}`,
         public: false,
         files,
       }),
@@ -179,7 +180,7 @@ async function createGitHubIssue(
   isTruncated: boolean,
   gistUrl: string
 ): Promise<{ url: string } | null> {
-  const title = `[AI Report] ${sanitizeText(providerName)} / ${sanitizeText(modelName)} - v${sanitizeText(version)}`;
+  const title = `[AI Report] ${sanitizeText(providerName, false)} / ${sanitizeText(modelName, false)} - v${sanitizeText(version, false)}`;
 
   const body = `## AI Advice Report
 
@@ -192,9 +193,9 @@ async function createGitHubIssue(
 ${sanitizeText(userNotes)}
 
 ### Conversation Preview
-\`\`\`
-${sanitizeText(conversationPreview)}${isTruncated ? '\n... (see full transcript in Gist)' : ''}
-\`\`\`
+\`\`\`\`
+${sanitizeText(conversationPreview, false)}${isTruncated ? '\n... (see full transcript in Gist)' : ''}
+\`\`\`\`
 
 ### Full Report
 [View full system prompt, conversation transcript, and debug log](${gistUrl})
