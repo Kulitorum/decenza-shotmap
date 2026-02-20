@@ -37,6 +37,12 @@ function sanitizeText(text: string): string {
     .replace(/\[([^\]]*)\]\(([^)]*)\)/g, '\\[$1\\]\\($2\\)')
     .replace(/!\[([^\]]*)\]\(([^)]*)\)/g, '!\\[$1\\]\\($2\\)');
 
+  // Escape backtick fences so user text can't break out of code blocks
+  sanitized = sanitized.replace(/^(`{3,})/gm, '\\$1');
+
+  // Escape HTML tags to prevent injection outside code fences (e.g. <img>, <details>)
+  sanitized = sanitized.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
   return sanitized;
 }
 
@@ -94,8 +100,9 @@ async function createGist(
     };
   }
 
+  let response: Response;
   try {
-    const response = await fetch(`${GITHUB_API_BASE}/gists`, {
+    response = await fetch(`${GITHUB_API_BASE}/gists`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${GITHUB_PAT}`,
@@ -110,23 +117,28 @@ async function createGist(
         files,
       }),
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('GitHub Gist creation failed:', response.status, errorText);
-      return null;
-    }
-
-    const data = await response.json() as { id: string; html_url: string };
-    if (!data.html_url?.startsWith('https://gist.github.com/')) {
-      console.error('Unexpected Gist URL:', data.html_url);
-      return null;
-    }
-    return { id: data.id, url: data.html_url };
   } catch (error) {
-    console.error('Error creating GitHub Gist:', error);
+    console.error('createGist: network error:', error);
     return null;
   }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('GitHub Gist creation failed:', response.status, errorText);
+    return null;
+  }
+
+  const data = await response.json() as { id?: unknown; html_url?: unknown };
+  if (typeof data.id !== 'string' || typeof data.html_url !== 'string') {
+    console.error('createGist: unexpected response shape:', JSON.stringify(data).slice(0, 200));
+    return null;
+  }
+  if (!data.html_url.startsWith('https://gist.github.com/')) {
+    console.error('createGist: unexpected Gist URL:', data.html_url, '— cleaning up gistId:', data.id);
+    await deleteGist(data.id);
+    return null;
+  }
+  return { id: data.id, url: data.html_url };
 }
 
 /**
@@ -134,7 +146,7 @@ async function createGist(
  */
 async function deleteGist(gistId: string): Promise<void> {
   try {
-    await fetch(`${GITHUB_API_BASE}/gists/${gistId}`, {
+    const response = await fetch(`${GITHUB_API_BASE}/gists/${gistId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${GITHUB_PAT}`,
@@ -143,8 +155,12 @@ async function deleteGist(gistId: string): Promise<void> {
         'User-Agent': 'Decenza-DE1-AiReporter',
       },
     });
+    if (!response.ok) {
+      const body = await response.text();
+      console.error('deleteGist: non-OK response — Gist may be orphaned. gistId:', gistId, 'status:', response.status, 'body:', body.slice(0, 500));
+    }
   } catch (error) {
-    console.error('Error deleting orphaned Gist:', error);
+    console.error('deleteGist: network error — Gist may be orphaned. gistId:', gistId, 'error:', error);
   }
 }
 
@@ -212,7 +228,11 @@ ${sanitizeText(conversationPreview)}${isTruncated ? '\n... (see full transcript 
       return null;
     }
 
-    const data = await response.json() as { html_url: string };
+    const data = await response.json() as { html_url?: unknown };
+    if (typeof data.html_url !== 'string' || !data.html_url.startsWith('https://github.com/')) {
+      console.error('createGitHubIssue: unexpected html_url:', data.html_url);
+      return null;
+    }
     return { url: data.html_url };
   } catch (error) {
     console.error('Error creating GitHub issue:', error);
@@ -229,8 +249,20 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     };
   }
 
+  try {
+    return await handleRequest(event);
+  } catch (error) {
+    console.error('aiReport handler: unhandled exception', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return respond(500, { success: false, error: 'Internal server error' });
+  }
+}
+
+async function handleRequest(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   // Get client IP for rate limiting
-  const clientIp = event.requestContext.http.sourceIp || 'unknown';
+  const clientIp = event.requestContext?.http?.sourceIp ?? 'unknown';
 
   // Check rate limit (separate bucket from crash reports)
   const { allowed, remaining } = await checkRateLimitCustom(`ai-report:${clientIp}`, 10);
