@@ -82,13 +82,13 @@ export const wsMessageSchema = z.discriminatedUnion('action', [
     isHeating: z.boolean(),
     isReady: z.boolean(),
     isAwake: z.boolean(),
-  }),
+  }).passthrough(),
   z.object({
     action: z.literal('command_response'),
     command_id: z.string().min(1).max(128),
     success: z.boolean(),
     data: z.record(z.unknown()).optional(),
-  }),
+  }).passthrough(),
 ]);
 
 export type ValidatedWsMessage = z.infer<typeof wsMessageSchema>;
