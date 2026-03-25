@@ -56,6 +56,17 @@ resource "aws_dynamodb_table" "ws_connections" {
     type = "S"
   }
 
+  attribute {
+    name = "device_id"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "DeviceIdIndex"
+    hash_key        = "device_id"
+    projection_type = "ALL"
+  }
+
   ttl {
     attribute_name = "ttl"
     enabled        = true
@@ -171,6 +182,31 @@ resource "aws_dynamodb_table" "library" {
     name            = "GSI3"
     hash_key        = "dataHash"
     projection_type = "KEYS_ONLY"
+  }
+
+  tags = local.common_tags
+}
+
+# Library deletion log - tracks deleted entry IDs for incremental sync
+resource "aws_dynamodb_table" "library_deletions" {
+  name         = "${local.project_name}-library-deletions"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
   }
 
   tags = local.common_tags
