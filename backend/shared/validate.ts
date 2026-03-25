@@ -50,12 +50,46 @@ export const shotEventInputSchema = z.object({
 export type ValidatedShotInput = z.infer<typeof shotEventInputSchema>;
 
 /** WebSocket message schema */
-export const wsMessageSchema = z.object({
-  action: z.enum(['subscribe', 'unsubscribe', 'ping']),
-  filters: z.object({
-    country_code: z.string().length(2).toUpperCase().optional(),
-  }).optional(),
-});
+export const wsMessageSchema = z.discriminatedUnion('action', [
+  // Existing actions
+  z.object({
+    action: z.literal('subscribe'),
+    filters: z.object({
+      country_code: z.string().length(2).toUpperCase().optional(),
+    }).optional(),
+  }),
+  z.object({ action: z.literal('unsubscribe') }),
+  z.object({ action: z.literal('ping') }),
+  // Relay actions
+  z.object({
+    action: z.literal('register'),
+    device_id: z.string().min(1).max(128),
+    role: z.enum(['device', 'controller']),
+    pairing_token: z.string().min(1).max(128),
+  }),
+  z.object({
+    action: z.literal('command'),
+    device_id: z.string().min(1).max(128),
+    pairing_token: z.string().min(1).max(128),
+    command: z.enum(['wake', 'sleep', 'status']),
+  }),
+  z.object({
+    action: z.literal('status_push'),
+    state: z.string().max(50),
+    phase: z.string().max(50),
+    temperature: z.number(),
+    waterLevelMl: z.number(),
+    isHeating: z.boolean(),
+    isReady: z.boolean(),
+    isAwake: z.boolean(),
+  }),
+  z.object({
+    action: z.literal('command_response'),
+    command_id: z.string().min(1).max(128),
+    success: z.boolean(),
+    data: z.record(z.unknown()).optional(),
+  }),
+]);
 
 export type ValidatedWsMessage = z.infer<typeof wsMessageSchema>;
 

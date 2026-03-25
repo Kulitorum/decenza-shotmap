@@ -79,6 +79,10 @@ export interface WsConnection {
   filters?: {
     country_code?: string;
   };
+  // Relay fields (optional - only for relay connections)
+  device_id?: string;
+  role?: 'device' | 'controller';
+  pairing_token_hash?: string;
 }
 
 /** DynamoDB raw shot record */
@@ -196,9 +200,42 @@ export interface LibraryListResponse {
   total: number;
   page: number;
   per_page: number;
+  deletedIds?: string[];
 }
 
 /** Library flag input */
 export interface LibraryFlagInput {
   reason: 'inappropriate' | 'spam' | 'broken';
+}
+
+// ============ Relay ============
+
+/** Relay command from controller to device */
+export interface RelayCommand {
+  type: 'relay_command';
+  command_id: string;
+  command: 'wake' | 'sleep' | 'status';
+  from_connection: string;
+}
+
+/** Relay response from device to controller */
+export interface RelayResponse {
+  type: 'relay_response';
+  command_id: string;
+  success: boolean;
+  data?: Record<string, unknown>;
+}
+
+/** Status push from device to controllers */
+export interface RelayStatus {
+  type: 'relay_status';
+  device_id: string;
+  state: string;
+  phase: string;
+  temperature: number;
+  waterLevelMl: number;
+  isHeating: boolean;
+  isReady: boolean;
+  isAwake: boolean;
+  timestamp: string;
 }

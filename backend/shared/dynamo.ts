@@ -22,6 +22,7 @@ const CITIES_TABLE = process.env.CITIES_TABLE || 'Cities';
 const IDEMPOTENCY_TABLE = process.env.IDEMPOTENCY_TABLE || 'Idempotency';
 const RATE_LIMIT_TABLE = process.env.RATE_LIMIT_TABLE || 'RateLimit';
 const LIBRARY_TABLE = process.env.LIBRARY_TABLE || 'Library';
+const LIBRARY_DELETIONS_TABLE = process.env.LIBRARY_DELETIONS_TABLE || 'LibraryDeletions';
 
 /** TTL for raw events: 180 days */
 const RAW_TTL_DAYS = parseInt(process.env.RAW_TTL_DAYS || '180', 10);
@@ -206,6 +207,60 @@ export async function updateConnectionTtl(connectionId: string): Promise<void> {
     ExpressionAttributeNames: { '#ttl': 'ttl' },
     ExpressionAttributeValues: { ':ttl': ttl },
   }));
+}
+
+export async function putConnectionWithDevice(
+  connectionId: string,
+  deviceId: string,
+  role: 'device' | 'controller',
+  pairingTokenHash: string
+): Promise<void> {
+  const now = Date.now();
+  const ttl = Math.floor(now / 1000) + CONNECTION_TTL_SECONDS;
+  await docClient.send(new PutCommand({
+    TableName: CONNECTIONS_TABLE,
+    Item: {
+      connection_id: connectionId,
+      connected_at: now,
+      ttl,
+      device_id: deviceId,
+      role,
+      pairing_token_hash: pairingTokenHash,
+    },
+  }));
+}
+
+export async function getConnectionsByDeviceId(
+  deviceId: string,
+  role?: string
+): Promise<WsConnection[]> {
+  const expressionValues: Record<string, unknown> = { ':deviceId': deviceId };
+  let filterExpr: string | undefined;
+  const expressionNames: Record<string, string> = {};
+
+  if (role) {
+    filterExpr = '#role = :role';
+    expressionValues[':role'] = role;
+    expressionNames['#role'] = 'role';
+  }
+
+  const response = await docClient.send(new QueryCommand({
+    TableName: CONNECTIONS_TABLE,
+    IndexName: 'DeviceIdIndex',
+    KeyConditionExpression: 'device_id = :deviceId',
+    ...(filterExpr ? { FilterExpression: filterExpr } : {}),
+    ExpressionAttributeValues: expressionValues,
+    ...(Object.keys(expressionNames).length > 0 ? { ExpressionAttributeNames: expressionNames } : {}),
+  }));
+  return (response.Items || []) as WsConnection[];
+}
+
+export async function getConnection(connectionId: string): Promise<WsConnection | null> {
+  const response = await docClient.send(new GetCommand({
+    TableName: CONNECTIONS_TABLE,
+    Key: { connection_id: connectionId },
+  }));
+  return (response.Item as WsConnection | undefined) || null;
 }
 
 // ============ Cities Lookup ============
@@ -437,6 +492,32 @@ export async function queryLibraryByDevice(deviceId: string): Promise<LibraryEnt
     ScanIndexForward: false,
   }));
   return (response.Items || []) as LibraryEntryRecord[];
+}
+
+/** Log a library entry deletion for incremental sync. TTL: 30 days. */
+export async function logLibraryDeletion(entryId: string): Promise<void> {
+  const now = new Date().toISOString();
+  const ttl = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
+  await docClient.send(new PutCommand({
+    TableName: LIBRARY_DELETIONS_TABLE,
+    Item: {
+      pk: 'ALL',
+      sk: `${now}#${entryId}`,
+      entryId,
+      deletedAt: now,
+      ttl,
+    },
+  }));
+}
+
+/** Query deletion log for entries deleted after a given timestamp. */
+export async function queryLibraryDeletionsSince(since: string): Promise<string[]> {
+  const response = await docClient.send(new QueryCommand({
+    TableName: LIBRARY_DELETIONS_TABLE,
+    KeyConditionExpression: 'pk = :pk AND sk > :since',
+    ExpressionAttributeValues: { ':pk': 'ALL', ':since': since },
+  }));
+  return (response.Items || []).map(item => item.entryId as string);
 }
 
 export async function scanLibraryEntries(): Promise<LibraryEntryRecord[]> {
