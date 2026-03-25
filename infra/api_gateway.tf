@@ -274,6 +274,72 @@ resource "aws_lambda_permission" "library_flag" {
 }
 
 
+# GET /v1/translations/upload-url
+resource "aws_apigatewayv2_integration" "translation_upload_url" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.translation_upload_url.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "get_translation_upload_url" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = "GET /v1/translations/upload-url"
+  target    = "integrations/${aws_apigatewayv2_integration.translation_upload_url.id}"
+}
+
+resource "aws_lambda_permission" "translation_upload_url" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.translation_upload_url.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+# GET /v1/translations/languages
+resource "aws_apigatewayv2_integration" "translation_list" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.translation_list.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "get_translation_languages" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = "GET /v1/translations/languages"
+  target    = "integrations/${aws_apigatewayv2_integration.translation_list.id}"
+}
+
+resource "aws_lambda_permission" "translation_list" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.translation_list.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+# GET /v1/translations/languages/{code}
+resource "aws_apigatewayv2_integration" "translation_get" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.translation_get.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "get_translation_language" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = "GET /v1/translations/languages/{code}"
+  target    = "integrations/${aws_apigatewayv2_integration.translation_get.id}"
+}
+
+resource "aws_lambda_permission" "translation_get" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.translation_get.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
 # API Gateway - WebSocket API
 
 resource "aws_apigatewayv2_api" "websocket" {

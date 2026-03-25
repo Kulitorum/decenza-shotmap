@@ -302,9 +302,10 @@ resource "aws_lambda_function" "library_list" {
 
   environment {
     variables = {
-      LIBRARY_TABLE        = aws_dynamodb_table.library.name
-      CORS_ORIGIN          = var.cors_origin
-      THUMBNAIL_URL_PREFIX = "https://${var.domain_name}/library/thumbnails"
+      LIBRARY_TABLE           = aws_dynamodb_table.library.name
+      LIBRARY_DELETIONS_TABLE = aws_dynamodb_table.library_deletions.name
+      CORS_ORIGIN             = var.cors_origin
+      THUMBNAIL_URL_PREFIX    = "https://${var.domain_name}/library/thumbnails"
     }
   }
 
@@ -388,9 +389,10 @@ resource "aws_lambda_function" "library_delete" {
 
   environment {
     variables = {
-      LIBRARY_TABLE  = aws_dynamodb_table.library.name
-      WEBSITE_BUCKET = aws_s3_bucket.website.id
-      CORS_ORIGIN    = var.cors_origin
+      LIBRARY_TABLE            = aws_dynamodb_table.library.name
+      LIBRARY_DELETIONS_TABLE  = aws_dynamodb_table.library_deletions.name
+      WEBSITE_BUCKET           = aws_s3_bucket.website.id
+      CORS_ORIGIN              = var.cors_origin
     }
   }
 
@@ -430,4 +432,85 @@ resource "aws_cloudwatch_log_group" "library_flag" {
   name              = "/aws/lambda/${aws_lambda_function.library_flag.function_name}"
   retention_in_days = 14
   tags              = local.common_tags
+}
+
+# ============ Translation Lambdas ============
+
+# Translation Upload URL Lambda
+resource "aws_lambda_function" "translation_upload_url" {
+  function_name = "${local.project_name}-translation-upload-url"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "translationUploadUrl.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 10
+  memory_size   = 128
+
+  filename         = "${path.module}/../backend/dist/translationUploadUrl.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/translationUploadUrl.zip")
+
+  environment {
+    variables = {
+      TRANSLATIONS_BUCKET = var.translations_bucket
+      RATE_LIMIT_TABLE    = aws_dynamodb_table.rate_limit.name
+      CORS_ORIGIN         = var.cors_origin
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "translation_upload_url" {
+  name              = "/aws/lambda/${aws_lambda_function.translation_upload_url.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# Translation List Lambda
+resource "aws_lambda_function" "translation_list" {
+  function_name = "${local.project_name}-translation-list"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "translationList.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 30
+  memory_size   = 256
+
+  filename         = "${path.module}/../backend/dist/translationList.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/translationList.zip")
+
+  environment {
+    variables = {
+      TRANSLATIONS_BUCKET = var.translations_bucket
+      CORS_ORIGIN         = var.cors_origin
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "translation_list" {
+  name              = "/aws/lambda/${aws_lambda_function.translation_list.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# Translation Get Lambda
+resource "aws_lambda_function" "translation_get" {
+  function_name = "${local.project_name}-translation-get"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "translationGet.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 10
+  memory_size   = 128
+
+  filename         = "${path.module}/../backend/dist/translationGet.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/translationGet.zip")
+
+  environment {
+    variables = {
+      TRANSLATIONS_BUCKET = var.translations_bucket
+      CORS_ORIGIN         = var.cors_origin
+    }
+  }
+
+  tags = local.common_tags
 }

@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { deleteLibraryEntry } from '../shared/dynamo.js';
+import { deleteLibraryEntry, logLibraryDeletion } from '../shared/dynamo.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
@@ -44,6 +44,9 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
         body: JSON.stringify({ error: 'Entry not found or you are not the owner' }),
       };
     }
+
+    // Log deletion for incremental sync
+    await logLibraryDeletion(id);
 
     // Fire-and-forget: delete thumbnails from S3
     if (WEBSITE_BUCKET) {

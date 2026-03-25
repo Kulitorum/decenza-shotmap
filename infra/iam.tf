@@ -63,11 +63,13 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
           aws_dynamodb_table.shots_raw.arn,
           aws_dynamodb_table.shots_agg.arn,
           aws_dynamodb_table.ws_connections.arn,
+          "${aws_dynamodb_table.ws_connections.arn}/index/*",
           aws_dynamodb_table.cities.arn,
           aws_dynamodb_table.idempotency.arn,
           aws_dynamodb_table.rate_limit.arn,
           aws_dynamodb_table.library.arn,
-          "${aws_dynamodb_table.library.arn}/index/*"
+          "${aws_dynamodb_table.library.arn}/index/*",
+          aws_dynamodb_table.library_deletions.arn
         ]
       }
     ]
@@ -106,12 +108,21 @@ resource "aws_iam_role_policy" "lambda_s3" {
         Action = [
           "s3:PutObject",
           "s3:PutObjectAcl",
-          "s3:DeleteObject"
+          "s3:DeleteObject",
+          "s3:GetObject"
         ]
         Resource = [
           "${aws_s3_bucket.website.arn}/api/*",
-          "${aws_s3_bucket.website.arn}/library/*"
+          "${aws_s3_bucket.website.arn}/library/*",
+          "arn:aws:s3:::${var.translations_bucket}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = "arn:aws:s3:::${var.translations_bucket}"
       }
     ]
   })

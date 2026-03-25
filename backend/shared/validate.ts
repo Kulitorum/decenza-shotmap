@@ -50,8 +50,8 @@ export const shotEventInputSchema = z.object({
 export type ValidatedShotInput = z.infer<typeof shotEventInputSchema>;
 
 /** WebSocket message schema */
-export const wsMessageSchema = z.discriminatedUnion('action', [
-  // Existing actions
+// All schemas use passthrough() to allow extra fields from clients
+const wsSchemas = [
   z.object({
     action: z.literal('subscribe'),
     filters: z.object({
@@ -60,7 +60,6 @@ export const wsMessageSchema = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('unsubscribe') }),
   z.object({ action: z.literal('ping') }),
-  // Relay actions
   z.object({
     action: z.literal('register'),
     device_id: z.string().min(1).max(128),
@@ -82,14 +81,18 @@ export const wsMessageSchema = z.discriminatedUnion('action', [
     isHeating: z.boolean(),
     isReady: z.boolean(),
     isAwake: z.boolean(),
-  }).passthrough(),
+  }),
   z.object({
     action: z.literal('command_response'),
     command_id: z.string().min(1).max(128),
     success: z.boolean(),
     data: z.record(z.unknown()).optional(),
-  }).passthrough(),
-]);
+  }),
+] as const;
+
+export const wsMessageSchema = z.discriminatedUnion('action',
+  wsSchemas.map(s => s.passthrough()) as any
+);
 
 export type ValidatedWsMessage = z.infer<typeof wsMessageSchema>;
 

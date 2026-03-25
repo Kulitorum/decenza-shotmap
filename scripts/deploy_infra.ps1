@@ -49,7 +49,10 @@ try {
         "libraryGet",
         "libraryDownload",
         "libraryDelete",
-        "libraryFlag"
+        "libraryFlag",
+        "translationUploadUrl",
+        "translationList",
+        "translationGet"
     )
 
     foreach ($Lambda in $Lambdas) {

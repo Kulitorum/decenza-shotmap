@@ -50,6 +50,12 @@ variable "api_throttle_burst" {
   default     = 200
 }
 
+variable "translations_bucket" {
+  description = "S3 bucket name for translation files"
+  type        = string
+  default     = "decenza-de1-translations"
+}
+
 variable "github_pat" {
   description = "GitHub Personal Access Token for crash report issue creation"
   type        = string

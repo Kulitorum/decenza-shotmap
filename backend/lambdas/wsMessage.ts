@@ -17,6 +17,7 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
 
   const validation = validateWsMessage(body);
   if (!validation.success) {
+    console.log(`Validation failed for ${connectionId}: ${validation.error}`, JSON.stringify(body));
     await sendToConnection(connectionId, { error: validation.error });
     return { statusCode: 400, body: validation.error };
   }
@@ -105,11 +106,16 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
 
     case 'status_push': {
       const conn = await getConnection(connectionId);
-      if (!conn?.device_id) break;
+      console.log(`Relay status_push: connectionId=${connectionId} device_id=${conn?.device_id} role=${conn?.role}`);
+      if (!conn?.device_id) {
+        console.log('Relay status_push: no device_id on connection, dropping');
+        break;
+      }
 
       const controllers = await getConnectionsByDeviceId(conn.device_id, 'controller');
-      await Promise.all(controllers.map(ctrl =>
-        sendToConnection(ctrl.connection_id, {
+      console.log(`Relay status_push: found ${controllers.length} controllers for device ${conn.device_id}`);
+      const results = await Promise.all(controllers.map(async ctrl => {
+        const sent = await sendToConnection(ctrl.connection_id, {
           type: 'relay_status',
           device_id: conn.device_id!,
           state: message.state,
@@ -120,8 +126,10 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
           isReady: message.isReady,
           isAwake: message.isAwake,
           timestamp: new Date().toISOString(),
-        })
-      ));
+        });
+        console.log(`Relay status_push: sent to ${ctrl.connection_id} result=${sent}`);
+        return sent;
+      }));
       break;
     }
 
