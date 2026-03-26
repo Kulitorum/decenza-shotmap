@@ -56,14 +56,15 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
     }
 
     case 'command': {
-      const tokenHash = createHash('sha256').update(message.pairing_token).digest('hex');
       const devices = await getConnectionsByDeviceId(message.device_id, 'device');
-      const device = devices.find(d => d.pairing_token_hash === tokenHash);
+      console.log(`Relay command: ${message.command} -> found ${devices.length} devices for ${message.device_id}`);
+      const device = devices[0]; // Use first connected device
 
       if (!device) {
+        console.log(`Relay command: no device connected`);
         await sendToConnection(connectionId, {
           type: 'error',
-          error: 'Device not connected or invalid pairing token',
+          error: 'Device not connected',
         });
         break;
       }
