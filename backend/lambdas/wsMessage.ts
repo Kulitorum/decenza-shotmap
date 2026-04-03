@@ -2,10 +2,18 @@ import type { APIGatewayProxyWebsocketEventV2, APIGatewayProxyResultV2 } from 'a
 import { createHash, randomUUID } from 'crypto';
 import { validateWsMessage } from '../shared/validate.js';
 import { putConnection, updateConnectionTtl, putConnectionWithDevice, getConnectionsByDeviceId, getConnection } from '../shared/dynamo.js';
-import { sendToConnection } from '../shared/broadcast.js';
+import { sendToConnection, relayBinary } from '../shared/broadcast.js';
 
 export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<APIGatewayProxyResultV2> {
   const connectionId = event.requestContext.connectionId;
+
+  // Binary frames arrive base64-encoded — relay them without JSON parsing
+  if (event.isBase64Encoded) {
+    const binaryData = Buffer.from(event.body || '', 'base64');
+    const { sent, failed } = await relayBinary(connectionId, binaryData);
+    console.log(`Binary relay: ${binaryData.length} bytes -> ${sent} sent, ${failed} failed`);
+    return { statusCode: 200, body: 'OK' };
+  }
 
   let body: unknown;
   try {

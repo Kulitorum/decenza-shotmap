@@ -3,7 +3,7 @@ import {
   PostToConnectionCommand,
   GoneException,
 } from '@aws-sdk/client-apigatewaymanagementapi';
-import { getAllConnections, deleteConnection } from './dynamo.js';
+import { getAllConnections, deleteConnection, getConnection, getConnectionsByDeviceId } from './dynamo.js';
 import type { ShotBroadcast, WsConnection } from './types.js';
 
 let apiClient: ApiGatewayManagementApiClient | null = null;
@@ -89,6 +89,44 @@ export async function sendToConnection(connectionId: string, message: unknown): 
       await deleteConnection(connectionId);
     }
     console.error(`Failed to send to ${connectionId}:`, error);
+    return false;
+  }
+}
+
+/** Relay a binary WebSocket frame to the paired device/controller */
+export async function relayBinary(senderConnectionId: string, binaryData: Buffer): Promise<{ sent: number; failed: number }> {
+  const conn = await getConnection(senderConnectionId);
+  if (!conn?.device_id || !conn?.role) {
+    return { sent: 0, failed: 0 };
+  }
+
+  const targetRole = conn.role === 'device' ? 'controller' : 'device';
+  const targets = await getConnectionsByDeviceId(conn.device_id, targetRole);
+
+  let sent = 0;
+  let failed = 0;
+  await Promise.all(targets.map(async (target) => {
+    const ok = await sendBinaryToConnection(target.connection_id, binaryData);
+    if (ok) sent++; else failed++;
+  }));
+
+  return { sent, failed };
+}
+
+/** Send binary data to a specific connection */
+export async function sendBinaryToConnection(connectionId: string, data: Buffer): Promise<boolean> {
+  const client = getApiClient();
+  try {
+    await client.send(new PostToConnectionCommand({
+      ConnectionId: connectionId,
+      Data: data,
+    }));
+    return true;
+  } catch (error) {
+    if (error instanceof GoneException) {
+      await deleteConnection(connectionId);
+    }
+    console.error(`Failed to send binary to ${connectionId}:`, error);
     return false;
   }
 }
