@@ -533,6 +533,7 @@ resource "aws_lambda_function" "get_device_state" {
   environment {
     variables = {
       DEVICE_STATE_TABLE = aws_dynamodb_table.device_state.name
+      CONNECTIONS_TABLE  = aws_dynamodb_table.ws_connections.name
       CORS_ORIGIN        = var.cors_origin
     }
   }
