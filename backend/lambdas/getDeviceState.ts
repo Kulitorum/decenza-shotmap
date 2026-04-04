@@ -1,5 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { getDeviceState } from '../shared/dynamo.js';
+import { createHash } from 'crypto';
+import { getDeviceState, getConnectionsByDeviceId } from '../shared/dynamo.js';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -9,8 +10,17 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   };
 
   const deviceId = event.queryStringParameters?.device_id;
-  if (!deviceId) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'device_id required' }) };
+  const pairingToken = event.queryStringParameters?.pairing_token;
+  if (!deviceId || !pairingToken) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'device_id and pairing_token required' }) };
+  }
+
+  // Verify pairing token against stored connection hashes
+  const tokenHash = createHash('sha256').update(pairingToken).digest('hex');
+  const conns = await getConnectionsByDeviceId(deviceId);
+  const authorized = conns.some(c => c.pairing_token_hash === tokenHash);
+  if (!authorized) {
+    return { statusCode: 403, headers, body: JSON.stringify({ error: 'Invalid pairing token' }) };
   }
 
   const state = await getDeviceState(deviceId);

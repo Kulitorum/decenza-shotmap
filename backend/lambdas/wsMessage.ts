@@ -162,8 +162,6 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
             }
           }));
         }
-      } else {
-        await putDeviceState(conn.device_id, message.isAwake);
       }
       break;
     }
@@ -184,6 +182,19 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
     }
 
     case 'register_fcm_token': {
+      // Verify pairing token by checking against stored connection hashes
+      const tokenHash = createHash('sha256').update(message.pairing_token).digest('hex');
+      const devices = await getConnectionsByDeviceId(message.device_id, 'device');
+      const authorized = devices.some(d => d.pairing_token_hash === tokenHash);
+      if (!authorized) {
+        // Also check controller connections (device may be offline but controller registered before)
+        const controllers = await getConnectionsByDeviceId(message.device_id, 'controller');
+        const ctrlAuthorized = controllers.some(c => c.pairing_token_hash === tokenHash);
+        if (!ctrlAuthorized) {
+          await sendToConnection(connectionId, { type: 'error', error: 'Invalid pairing token' });
+          break;
+        }
+      }
       await putFcmToken(message.device_id, message.fcm_token, message.platform);
       await sendToConnection(connectionId, {
         type: 'fcm_token_registered',
@@ -194,6 +205,14 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
     }
 
     case 'get_device_state': {
+      // Verify pairing token
+      const tokenHash = createHash('sha256').update(message.pairing_token).digest('hex');
+      const conns = await getConnectionsByDeviceId(message.device_id);
+      const authorized = conns.some(c => c.pairing_token_hash === tokenHash);
+      if (!authorized) {
+        await sendToConnection(connectionId, { type: 'error', error: 'Invalid pairing token' });
+        break;
+      }
       const state = await getDeviceState(message.device_id);
       await sendToConnection(connectionId, {
         type: 'device_state',
