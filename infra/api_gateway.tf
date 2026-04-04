@@ -340,6 +340,28 @@ resource "aws_lambda_permission" "translation_get" {
   source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
 }
 
+# GET /v1/device-state
+resource "aws_apigatewayv2_integration" "get_device_state" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.get_device_state.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "get_device_state" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = "GET /v1/device-state"
+  target    = "integrations/${aws_apigatewayv2_integration.get_device_state.id}"
+}
+
+resource "aws_lambda_permission" "get_device_state" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_device_state.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
 # API Gateway - WebSocket API
 
 resource "aws_apigatewayv2_api" "websocket" {
