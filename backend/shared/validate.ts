@@ -59,6 +59,8 @@ export const wsMessageSchema = z.union([
   z.object({ action: z.literal('status_push'), state: z.string().max(50), phase: z.string().max(50), temperature: z.number(), waterLevelMl: z.number(), isHeating: z.boolean(), isReady: z.boolean(), isAwake: z.boolean() }).passthrough(),
   z.object({ action: z.literal('command_response'), command_id: z.string().min(1).max(128), success: z.boolean(), data: z.record(z.unknown()).optional() }).passthrough(),
   z.object({ action: z.literal('binary_relay'), data: z.string().min(1) }),
+  z.object({ action: z.literal('register_fcm_token'), device_id: z.string().min(1).max(128), pairing_token: z.string().min(1).max(128), fcm_token: z.string().min(1).max(512), platform: z.enum(['android', 'ios']) }),
+  z.object({ action: z.literal('get_device_state'), device_id: z.string().min(1).max(128), pairing_token: z.string().min(1).max(128) }),
 ]);
 
 export type ValidatedWsMessage = z.infer<typeof wsMessageSchema>;

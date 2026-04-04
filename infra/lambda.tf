@@ -131,8 +131,11 @@ resource "aws_lambda_function" "ws_message" {
 
   environment {
     variables = {
-      CONNECTIONS_TABLE      = aws_dynamodb_table.ws_connections.name
-      WEBSOCKET_API_ENDPOINT = "https://${aws_apigatewayv2_api.websocket.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.websocket.name}"
+      CONNECTIONS_TABLE        = aws_dynamodb_table.ws_connections.name
+      WEBSOCKET_API_ENDPOINT   = "https://${aws_apigatewayv2_api.websocket.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.websocket.name}"
+      DEVICE_STATE_TABLE       = aws_dynamodb_table.device_state.name
+      FCM_TOKENS_TABLE         = aws_dynamodb_table.fcm_tokens.name
+      FCM_SERVICE_ACCOUNT_JSON = var.fcm_service_account_json
     }
   }
 

@@ -1,7 +1,7 @@
 import type { APIGatewayProxyWebsocketEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { createHash, randomUUID } from 'crypto';
 import { validateWsMessage } from '../shared/validate.js';
-import { putConnection, updateConnectionTtl, putConnectionWithDevice, getConnectionsByDeviceId, getConnection } from '../shared/dynamo.js';
+import { putConnection, updateConnectionTtl, putConnectionWithDevice, getConnectionsByDeviceId, getConnection, putFcmToken, getDeviceState } from '../shared/dynamo.js';
 import { sendToConnection, sendBinaryToConnection } from '../shared/broadcast.js';
 
 export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<APIGatewayProxyResultV2> {
@@ -154,6 +154,27 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
         sendToConnection(target.connection_id, { type: 'binary_relay', data: message.data })
       ));
       console.log(`Binary relay: ${message.data.length} chars -> ${targets.length} targets`);
+      break;
+    }
+
+    case 'register_fcm_token': {
+      const tokenHash = createHash('sha256').update(message.pairing_token).digest('hex');
+      await putFcmToken(message.device_id, message.fcm_token, message.platform);
+      await sendToConnection(connectionId, {
+        type: 'fcm_token_registered',
+        device_id: message.device_id,
+      });
+      console.log(`FCM token registered for device ${message.device_id} (${message.platform})`);
+      break;
+    }
+
+    case 'get_device_state': {
+      const state = await getDeviceState(message.device_id);
+      await sendToConnection(connectionId, {
+        type: 'device_state',
+        device_id: message.device_id,
+        isAwake: state?.isAwake ?? false,
+      });
       break;
     }
 
