@@ -69,7 +69,9 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
           aws_dynamodb_table.rate_limit.arn,
           aws_dynamodb_table.library.arn,
           "${aws_dynamodb_table.library.arn}/index/*",
-          aws_dynamodb_table.library_deletions.arn
+          aws_dynamodb_table.library_deletions.arn,
+          aws_dynamodb_table.device_state.arn,
+          aws_dynamodb_table.fcm_tokens.arn
         ]
       }
     ]
