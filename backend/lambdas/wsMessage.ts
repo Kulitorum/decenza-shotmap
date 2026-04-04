@@ -1,8 +1,9 @@
 import type { APIGatewayProxyWebsocketEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { createHash, randomUUID } from 'crypto';
 import { validateWsMessage } from '../shared/validate.js';
-import { putConnection, updateConnectionTtl, putConnectionWithDevice, getConnectionsByDeviceId, getConnection, putFcmToken, getDeviceState } from '../shared/dynamo.js';
+import { putConnection, updateConnectionTtl, putConnectionWithDevice, getConnectionsByDeviceId, getConnection, putFcmToken, getDeviceState, putDeviceState, getFcmTokensByDevice, deleteFcmToken } from '../shared/dynamo.js';
 import { sendToConnection, sendBinaryToConnection } from '../shared/broadcast.js';
+import { sendFcmMessage } from '../shared/fcm.js';
 
 export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<APIGatewayProxyResultV2> {
   const connectionId = event.requestContext.connectionId;
@@ -121,9 +122,10 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
         break;
       }
 
+      // Broadcast to connected controllers (existing behavior)
       const controllers = await getConnectionsByDeviceId(conn.device_id, 'controller');
       console.log(`Relay status_push: found ${controllers.length} controllers for device ${conn.device_id}`);
-      const results = await Promise.all(controllers.map(async ctrl => {
+      await Promise.all(controllers.map(async ctrl => {
         const sent = await sendToConnection(ctrl.connection_id, {
           type: 'relay_status',
           device_id: conn.device_id!,
@@ -139,6 +141,30 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
         console.log(`Relay status_push: sent to ${ctrl.connection_id} result=${sent}`);
         return sent;
       }));
+
+      // Cache state and send FCM if isAwake changed
+      const prevState = await getDeviceState(conn.device_id);
+      if (prevState === null || prevState.isAwake !== message.isAwake) {
+        await putDeviceState(conn.device_id, message.isAwake);
+        console.log(`Device ${conn.device_id} isAwake changed: ${prevState?.isAwake} -> ${message.isAwake}`);
+
+        // Send FCM to all registered tokens
+        const tokens = await getFcmTokensByDevice(conn.device_id);
+        if (tokens.length > 0) {
+          console.log(`FCM: sending isAwake=${message.isAwake} to ${tokens.length} tokens`);
+          await Promise.all(tokens.map(async (t) => {
+            const ok = await sendFcmMessage(t.fcm_token, {
+              device_id: conn.device_id!,
+              isAwake: String(message.isAwake),
+            });
+            if (!ok) {
+              await deleteFcmToken(conn.device_id!, t.fcm_token);
+            }
+          }));
+        }
+      } else {
+        await putDeviceState(conn.device_id, message.isAwake);
+      }
       break;
     }
 
