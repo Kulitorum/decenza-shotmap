@@ -23,6 +23,8 @@ const IDEMPOTENCY_TABLE = process.env.IDEMPOTENCY_TABLE || 'Idempotency';
 const RATE_LIMIT_TABLE = process.env.RATE_LIMIT_TABLE || 'RateLimit';
 const LIBRARY_TABLE = process.env.LIBRARY_TABLE || 'Library';
 const LIBRARY_DELETIONS_TABLE = process.env.LIBRARY_DELETIONS_TABLE || 'LibraryDeletions';
+const DEVICE_STATE_TABLE = process.env.DEVICE_STATE_TABLE || 'DeviceState';
+const FCM_TOKENS_TABLE = process.env.FCM_TOKENS_TABLE || 'FcmTokens';
 
 /** TTL for raw events: 180 days */
 const RAW_TTL_DAYS = parseInt(process.env.RAW_TTL_DAYS || '180', 10);
@@ -536,4 +538,70 @@ export async function scanLibraryEntries(): Promise<LibraryEntryRecord[]> {
   } while (lastKey);
 
   return items;
+}
+
+// ============ Device State ============
+
+/** Get cached device state (isAwake) */
+export async function getDeviceState(deviceId: string): Promise<{ isAwake: boolean } | null> {
+  const response = await docClient.send(new GetCommand({
+    TableName: DEVICE_STATE_TABLE,
+    Key: { device_id: deviceId },
+  }));
+  if (!response.Item) return null;
+  return { isAwake: response.Item.isAwake as boolean };
+}
+
+/** Update cached device state */
+export async function putDeviceState(deviceId: string, isAwake: boolean): Promise<void> {
+  await docClient.send(new PutCommand({
+    TableName: DEVICE_STATE_TABLE,
+    Item: {
+      device_id: deviceId,
+      isAwake,
+      last_updated: new Date().toISOString(),
+    },
+  }));
+}
+
+// ============ FCM Tokens ============
+
+/** TTL for FCM tokens: 90 days */
+const FCM_TOKEN_TTL_SECONDS = 90 * 24 * 60 * 60;
+
+/** Store or refresh an FCM token for a device */
+export async function putFcmToken(
+  deviceId: string,
+  fcmToken: string,
+  platform: 'android' | 'ios'
+): Promise<void> {
+  const ttl = Math.floor(Date.now() / 1000) + FCM_TOKEN_TTL_SECONDS;
+  await docClient.send(new PutCommand({
+    TableName: FCM_TOKENS_TABLE,
+    Item: {
+      device_id: deviceId,
+      fcm_token: fcmToken,
+      platform,
+      last_updated: new Date().toISOString(),
+      ttl,
+    },
+  }));
+}
+
+/** Get all FCM tokens for a device */
+export async function getFcmTokensByDevice(deviceId: string): Promise<Array<{ fcm_token: string; platform: string }>> {
+  const response = await docClient.send(new QueryCommand({
+    TableName: FCM_TOKENS_TABLE,
+    KeyConditionExpression: 'device_id = :deviceId',
+    ExpressionAttributeValues: { ':deviceId': deviceId },
+  }));
+  return (response.Items || []) as Array<{ fcm_token: string; platform: string }>;
+}
+
+/** Delete a specific FCM token (e.g., when FCM reports it invalid) */
+export async function deleteFcmToken(deviceId: string, fcmToken: string): Promise<void> {
+  await docClient.send(new DeleteCommand({
+    TableName: FCM_TOKENS_TABLE,
+    Key: { device_id: deviceId, fcm_token: fcmToken },
+  }));
 }
