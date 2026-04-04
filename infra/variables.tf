@@ -62,3 +62,10 @@ variable "github_pat" {
   sensitive   = true
   default     = ""
 }
+
+variable "fcm_service_account_json" {
+  description = "Google service account JSON for Firebase Cloud Messaging"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
