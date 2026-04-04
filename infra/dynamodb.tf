@@ -211,3 +211,42 @@ resource "aws_dynamodb_table" "library_deletions" {
 
   tags = local.common_tags
 }
+
+# Device state table - caches last known isAwake per device
+resource "aws_dynamodb_table" "device_state" {
+  name         = "${local.project_name}-device-state"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "device_id"
+
+  attribute {
+    name = "device_id"
+    type = "S"
+  }
+
+  tags = local.common_tags
+}
+
+# FCM tokens table - stores FCM push notification targets per device
+resource "aws_dynamodb_table" "fcm_tokens" {
+  name         = "${local.project_name}-fcm-tokens"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "device_id"
+  range_key    = "fcm_token"
+
+  attribute {
+    name = "device_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "fcm_token"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
+  tags = local.common_tags
+}

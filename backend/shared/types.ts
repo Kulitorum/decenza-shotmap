@@ -239,3 +239,21 @@ export interface RelayStatus {
   isAwake: boolean;
   timestamp: string;
 }
+
+// ============ Device State & FCM ============
+
+/** Cached device state (isAwake) */
+export interface DeviceStateRecord {
+  device_id: string;
+  isAwake: boolean;
+  last_updated: string;  // ISO 8601
+}
+
+/** FCM token registration */
+export interface FcmTokenRecord {
+  device_id: string;
+  fcm_token: string;
+  platform: 'android' | 'ios';
+  last_updated: string;  // ISO 8601
+  ttl: number;
+}
