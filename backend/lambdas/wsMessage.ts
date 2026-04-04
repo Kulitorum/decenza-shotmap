@@ -158,7 +158,6 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
     }
 
     case 'register_fcm_token': {
-      const tokenHash = createHash('sha256').update(message.pairing_token).digest('hex');
       await putFcmToken(message.device_id, message.fcm_token, message.platform);
       await sendToConnection(connectionId, {
         type: 'fcm_token_registered',
