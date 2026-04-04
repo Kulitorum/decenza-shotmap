@@ -2,7 +2,7 @@ import type { APIGatewayProxyWebsocketEventV2, APIGatewayProxyResultV2 } from 'a
 import { createHash, randomUUID } from 'crypto';
 import { validateWsMessage } from '../shared/validate.js';
 import { putConnection, updateConnectionTtl, putConnectionWithDevice, getConnectionsByDeviceId, getConnection } from '../shared/dynamo.js';
-import { sendToConnection, relayBinary } from '../shared/broadcast.js';
+import { sendToConnection, sendBinaryToConnection } from '../shared/broadcast.js';
 
 export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<APIGatewayProxyResultV2> {
   const connectionId = event.requestContext.connectionId;
@@ -139,6 +139,21 @@ export async function handler(event: APIGatewayProxyWebsocketEventV2): Promise<A
         console.log(`Relay status_push: sent to ${ctrl.connection_id} result=${sent}`);
         return sent;
       }));
+      break;
+    }
+
+    case 'binary_relay': {
+      const conn = await getConnection(connectionId);
+      if (!conn?.device_id || !conn?.role) break;
+
+      const targetRole = conn.role === 'device' ? 'controller' : 'device';
+      const targets = await getConnectionsByDeviceId(conn.device_id, targetRole);
+
+      // Forward the JSON envelope as-is (base64 data stays encoded)
+      await Promise.all(targets.map(target =>
+        sendToConnection(target.connection_id, { type: 'binary_relay', data: message.data })
+      ));
+      console.log(`Binary relay: ${message.data.length} chars -> ${targets.length} targets`);
       break;
     }
 

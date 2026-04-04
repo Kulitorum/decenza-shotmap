@@ -407,9 +407,10 @@ resource "aws_lambda_permission" "ws_disconnect" {
 
 # $default route (handles all messages)
 resource "aws_apigatewayv2_integration" "ws_message" {
-  api_id           = aws_apigatewayv2_api.websocket.id
-  integration_type = "AWS_PROXY"
-  integration_uri  = aws_lambda_function.ws_message.invoke_arn
+  api_id                    = aws_apigatewayv2_api.websocket.id
+  integration_type          = "AWS_PROXY"
+  integration_uri           = aws_lambda_function.ws_message.invoke_arn
+  content_handling_strategy = "CONVERT_TO_TEXT"
 }
 
 resource "aws_apigatewayv2_route" "ws_default" {
