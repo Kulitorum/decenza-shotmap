@@ -70,6 +70,8 @@ aws s3 sync $DistDir "s3://$BucketName" `
 Write-Host "Uploading assets (long cache)..." -ForegroundColor Yellow
 aws s3 sync $DistDir "s3://$BucketName" `
     --exclude "*.html" `
+    --exclude "library/*" `
+    --exclude "api/*" `
     --cache-control "public, max-age=31536000, immutable" `
     --delete
 

@@ -48,6 +48,8 @@ aws s3 sync "$DIST_DIR" "s3://$BUCKET_NAME" \
 echo "Uploading assets (long cache)..."
 aws s3 sync "$DIST_DIR" "s3://$BUCKET_NAME" \
     --exclude "*.html" \
+    --exclude "library/*" \
+    --exclude "api/*" \
     --cache-control "public, max-age=31536000, immutable" \
     --delete
 
