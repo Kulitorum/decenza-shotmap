@@ -517,3 +517,31 @@ resource "aws_lambda_function" "translation_get" {
 
   tags = local.common_tags
 }
+
+# Get Device State Lambda
+resource "aws_lambda_function" "get_device_state" {
+  function_name = "${local.project_name}-get-device-state"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "getDeviceState.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 10
+  memory_size   = 128
+
+  filename         = "${path.module}/../backend/dist/getDeviceState.zip"
+  source_code_hash = filebase64sha256("${path.module}/../backend/dist/getDeviceState.zip")
+
+  environment {
+    variables = {
+      DEVICE_STATE_TABLE = aws_dynamodb_table.device_state.name
+      CORS_ORIGIN        = var.cors_origin
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "get_device_state" {
+  name              = "/aws/lambda/${aws_lambda_function.get_device_state.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
