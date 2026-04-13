@@ -7,7 +7,7 @@ resource "aws_lambda_function" "ingest_shot" {
   function_name = "${local.project_name}-ingest-shot"
   role          = aws_iam_role.lambda_role.arn
   handler       = "ingestShot.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 256
 
@@ -35,7 +35,7 @@ resource "aws_lambda_function" "get_stats" {
   function_name = "${local.project_name}-get-stats"
   role          = aws_iam_role.lambda_role.arn
   handler       = "getStats.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 256
 
@@ -58,7 +58,7 @@ resource "aws_lambda_function" "get_recent_shots" {
   function_name = "${local.project_name}-get-recent-shots"
   role          = aws_iam_role.lambda_role.arn
   handler       = "getRecentShots.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 256
 
@@ -80,7 +80,7 @@ resource "aws_lambda_function" "ws_connect" {
   function_name = "${local.project_name}-ws-connect"
   role          = aws_iam_role.lambda_role.arn
   handler       = "wsConnect.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 128
 
@@ -101,7 +101,7 @@ resource "aws_lambda_function" "ws_disconnect" {
   function_name = "${local.project_name}-ws-disconnect"
   role          = aws_iam_role.lambda_role.arn
   handler       = "wsDisconnect.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 128
 
@@ -122,7 +122,7 @@ resource "aws_lambda_function" "ws_message" {
   function_name = "${local.project_name}-ws-message"
   role          = aws_iam_role.lambda_role.arn
   handler       = "wsMessage.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 128
 
@@ -184,7 +184,7 @@ resource "aws_lambda_function" "export_shots" {
   function_name = "${local.project_name}-export-shots"
   role          = aws_iam_role.lambda_role.arn
   handler       = "exportShots.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 30
   memory_size   = 256
 
@@ -234,7 +234,7 @@ resource "aws_lambda_function" "crash_report" {
   function_name = "${local.project_name}-crash-report"
   role          = aws_iam_role.lambda_role.arn
   handler       = "crashReport.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 30
   memory_size   = 256
 
@@ -265,7 +265,7 @@ resource "aws_lambda_function" "library_create" {
   function_name = "${local.project_name}-library-create"
   role          = aws_iam_role.lambda_role.arn
   handler       = "libraryCreate.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 256
 
@@ -296,7 +296,7 @@ resource "aws_lambda_function" "library_list" {
   function_name = "${local.project_name}-library-list"
   role          = aws_iam_role.lambda_role.arn
   handler       = "libraryList.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 256
 
@@ -326,7 +326,7 @@ resource "aws_lambda_function" "library_get" {
   function_name = "${local.project_name}-library-get"
   role          = aws_iam_role.lambda_role.arn
   handler       = "libraryGet.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 256
 
@@ -355,7 +355,7 @@ resource "aws_lambda_function" "library_download" {
   function_name = "${local.project_name}-library-download"
   role          = aws_iam_role.lambda_role.arn
   handler       = "libraryDownload.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 256
 
@@ -383,7 +383,7 @@ resource "aws_lambda_function" "library_delete" {
   function_name = "${local.project_name}-library-delete"
   role          = aws_iam_role.lambda_role.arn
   handler       = "libraryDelete.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 256
 
@@ -413,7 +413,7 @@ resource "aws_lambda_function" "library_flag" {
   function_name = "${local.project_name}-library-flag"
   role          = aws_iam_role.lambda_role.arn
   handler       = "libraryFlag.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 256
 
@@ -444,7 +444,7 @@ resource "aws_lambda_function" "translation_upload_url" {
   function_name = "${local.project_name}-translation-upload-url"
   role          = aws_iam_role.lambda_role.arn
   handler       = "translationUploadUrl.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 128
 
@@ -473,7 +473,7 @@ resource "aws_lambda_function" "translation_list" {
   function_name = "${local.project_name}-translation-list"
   role          = aws_iam_role.lambda_role.arn
   handler       = "translationList.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 30
   memory_size   = 256
 
@@ -501,7 +501,7 @@ resource "aws_lambda_function" "translation_get" {
   function_name = "${local.project_name}-translation-get"
   role          = aws_iam_role.lambda_role.arn
   handler       = "translationGet.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 128
 
@@ -523,7 +523,7 @@ resource "aws_lambda_function" "get_device_state" {
   function_name = "${local.project_name}-get-device-state"
   role          = aws_iam_role.lambda_role.arn
   handler       = "getDeviceState.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 10
   memory_size   = 128
 

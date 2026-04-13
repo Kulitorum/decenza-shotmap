@@ -37,6 +37,7 @@ LAMBDAS=(
     "translationUploadUrl"
     "translationList"
     "translationGet"
+    "getDeviceState"
 )
 
 for LAMBDA in "${LAMBDAS[@]}"; do

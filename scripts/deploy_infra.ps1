@@ -52,7 +52,8 @@ try {
         "libraryFlag",
         "translationUploadUrl",
         "translationList",
-        "translationGet"
+        "translationGet",
+        "getDeviceState"
     )
 
     foreach ($Lambda in $Lambdas) {
