@@ -229,11 +229,18 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     createdAt: now,
   };
 
-  await putLibraryEntry(record);
-
   // Upload thumbnails to S3 if present
+  if ((thumbnailFullBuffer || thumbnailCompactBuffer) && !WEBSITE_BUCKET) {
+    console.error('Cannot upload library thumbnails: WEBSITE_BUCKET is not configured');
+    return {
+      statusCode: 503,
+      headers: CORS_HEADERS,
+      body: JSON.stringify({ error: 'Unable to store thumbnails. Please try again later.' }),
+    };
+  }
+
   const uploads: Promise<unknown>[] = [];
-  if (thumbnailFullBuffer && WEBSITE_BUCKET) {
+  if (thumbnailFullBuffer) {
     uploads.push(s3.send(new PutObjectCommand({
       Bucket: WEBSITE_BUCKET,
       Key: `library/thumbnails/${id}_full.png`,
@@ -242,7 +249,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       CacheControl: 'public, max-age=3600',
     })));
   }
-  if (thumbnailCompactBuffer && WEBSITE_BUCKET) {
+  if (thumbnailCompactBuffer) {
     uploads.push(s3.send(new PutObjectCommand({
       Bucket: WEBSITE_BUCKET,
       Key: `library/thumbnails/${id}_compact.png`,
@@ -256,8 +263,17 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       await Promise.all(uploads);
     } catch (err) {
       console.error('Failed to upload thumbnails to S3:', err);
+      return {
+        statusCode: 503,
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ error: 'Unable to store thumbnails. Please try again later.' }),
+      };
     }
   }
+
+  // Publish only once every advertised thumbnail exists. A failed upload must
+  // not leave a record that blocks a retry as duplicate data.
+  await putLibraryEntry(record);
 
   const response: Record<string, unknown> = {
     id,
