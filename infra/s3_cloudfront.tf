@@ -175,20 +175,9 @@ resource "aws_cloudfront_distribution" "website" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 
-  # SPA routing: return index.html for 404s
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 10
-  }
-
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 10
-  }
+  # The map has no client-side path routes; default_root_object serves it at /.
+  # Preserve S3 errors for missing/inaccessible assets instead of returning the
+  # map HTML with HTTP 200 for a thumbnail URL.
 
   restrictions {
     geo_restriction {

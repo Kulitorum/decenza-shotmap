@@ -39,13 +39,17 @@ npm run build
 
 ### Deploy Frontend
 
+From the repository root, use the deployment script so uploaded library images
+and API documentation are preserved:
+
 ```bash
-cd frontend
-npm ci
-npm run build
-aws s3 sync dist s3://<your-bucket-name> --delete
-aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
+bash scripts/deploy_frontend.sh <your-bucket-name> <distribution-id>
 ```
+
+On Windows, use `scripts/deploy_frontend.ps1` with `-BucketName` and
+`-DistributionId`. Both scripts can also read these values from Terraform outputs.
+Do not sync the entire bucket with an unfiltered `--delete`: it also holds
+user-uploaded `library/` images.
 
 ### Test with a Shot Event
 
